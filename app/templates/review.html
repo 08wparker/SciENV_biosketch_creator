@@ -413,9 +413,21 @@
                         <div class="flex items-center gap-2 mb-2">
                             <span class="inline-flex items-center justify-center w-6 h-6 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">${idx + 1}</span>
                             <span class="text-xs text-gray-400">${(contrib.citations || []).length} citation(s)</span>
-                            <button onclick="deleteContribution(${idx})" class="ml-auto text-red-400 hover:text-red-600 text-xs">Delete</button>
+                            <button onclick="editContribution(${idx})" class="ml-auto text-blue-400 hover:text-blue-600 text-xs">Edit</button>
+                            <button onclick="deleteContribution(${idx})" class="text-red-400 hover:text-red-600 text-xs">Delete</button>
                         </div>
-                        <p class="text-gray-700 text-sm contribution-narrative">${escapeHtml(contrib.narrative)}</p>
+                        <div id="narrative-display-${idx}">
+                            <p class="text-gray-700 text-sm contribution-narrative whitespace-pre-wrap">${escapeHtml(contrib.narrative)}</p>
+                        </div>
+                        <div id="narrative-edit-${idx}" class="hidden">
+                            <textarea id="narrative-textarea-${idx}"
+                                      class="w-full p-2 text-sm border rounded-lg focus:ring-2 focus:ring-orange-300 focus:border-orange-300"
+                                      rows="6">${escapeHtml(contrib.narrative)}</textarea>
+                            <div class="flex gap-2 mt-2">
+                                <button onclick="saveEdit(${idx})" class="px-3 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600">Save</button>
+                                <button onclick="cancelEdit(${idx})" class="px-3 py-1 text-sm bg-gray-300 text-gray-700 rounded hover:bg-gray-400">Cancel</button>
+                            </div>
+                        </div>
                         ${citationsHtml ? `
                         <div class="mt-2 pl-4 border-l-2 border-gray-200">
                             <ul class="text-xs text-gray-500 space-y-1">${citationsHtml}</ul>
@@ -424,6 +436,30 @@
                 </div>
             </div>`;
         }).join('');
+    }
+
+    function editContribution(index) {
+        document.getElementById(`narrative-display-${index}`).classList.add('hidden');
+        document.getElementById(`narrative-edit-${index}`).classList.remove('hidden');
+        const textarea = document.getElementById(`narrative-textarea-${index}`);
+        textarea.focus();
+        // Auto-resize textarea
+        textarea.style.height = 'auto';
+        textarea.style.height = Math.max(150, textarea.scrollHeight) + 'px';
+    }
+
+    function saveEdit(index) {
+        const textarea = document.getElementById(`narrative-textarea-${index}`);
+        contributions[index].narrative = textarea.value;
+        renderContributions();
+        updatePreview();
+    }
+
+    function cancelEdit(index) {
+        document.getElementById(`narrative-display-${index}`).classList.remove('hidden');
+        document.getElementById(`narrative-edit-${index}`).classList.add('hidden');
+        // Reset textarea to original value
+        document.getElementById(`narrative-textarea-${index}`).value = contributions[index].narrative;
     }
 
     function escapeHtml(text) {

@@ -5,7 +5,8 @@ from .models import (
     Honor,
     Citation,
     Contribution,
-    PersonalStatement
+    PersonalStatement,
+    Grant
 )
 from .biosketch_parser import BiosketchParser
 from .citation_parser import CitationParser
@@ -18,6 +19,7 @@ __all__ = [
     'Citation',
     'Contribution',
     'PersonalStatement',
+    'Grant',
     'BiosketchParser',
     'CitationParser'
 ]

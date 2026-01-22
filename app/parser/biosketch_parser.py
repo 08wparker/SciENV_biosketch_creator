@@ -19,7 +19,8 @@ from .models import (
     Honor,
     Citation,
     Contribution,
-    PersonalStatement
+    PersonalStatement,
+    Grant
 )
 from .citation_parser import CitationParser
 
@@ -153,7 +154,7 @@ class BiosketchParser:
     def _parse_section_a(self, content: List[str]):
         """Parse Section A - Personal Statement."""
         personal_text = []
-        research_support = []
+        grant_lines = []
         citations = []
 
         in_research_support = False
@@ -177,17 +178,144 @@ class BiosketchParser:
                 citation = CitationParser.parse_citation(line)
                 citations.append(citation)
             elif in_research_support:
-                # Collect research support entries
-                research_support.append(line)
+                # Collect grant lines for later parsing
+                grant_lines.append(line)
             else:
                 # Personal statement text
                 personal_text.append(line)
 
+        # Parse grants from collected lines
+        grants = self._parse_grants(grant_lines)
+
         self.data.personal_statement = PersonalStatement(
             text=' '.join(personal_text),
-            research_support=research_support,
+            grants=grants,
             citations=citations
         )
+
+    def _parse_grants(self, lines: List[str]) -> List[Grant]:
+        """Parse research support/grant entries.
+
+        Grants typically appear as:
+        - Line 1: [Funder] [Number] [PI] (PI/role) [dates]
+        - Line 2: Grant title
+        - Optional Line 3: Role: Co-investigator (if not PI)
+
+        Examples:
+        NIH K08 HL150291    Parker (PI)    02/01/2020 - 01/31/2025
+        Mending a Broken Heart Allocation System with Machine Learning
+
+        NIH R01HL173037    Mayampurath (PI)    5/2024 – 03/2029
+        Clinical Decision Support for Early Detection...
+        Role: Co-investigator
+        """
+        grants = []
+        current_grant = None
+
+        # Pattern for grant header line: funder + number + PI + dates
+        # e.g., "NIH K08 HL150291    Parker (PI)    02/01/2020 - 01/31/2025"
+        grant_header_pattern = re.compile(
+            r'^(NIH|NSF|DoD|VA|CDC|Greenwall|AHRQ|PCORI|[A-Z][a-z]+\s+Foundation)'  # Funder
+            r'[:\s]+'
+            r'([A-Z0-9\-\s]+?)'  # Grant number (or "No number")
+            r'\s+'
+            r'([A-Za-z,\s]+?)'  # PI name(s)
+            r'\s*\(([^)]+)\)'  # Role in parentheses (PI, contact PI, etc.)
+            r'\s*'
+            r'(\d{1,2}/\d{1,4}\s*[-–]\s*\d{1,2}/\d{1,4}|\d{4}\s*[-–]\s*\d{4})?',  # Date range (optional)
+            re.IGNORECASE
+        )
+
+        # Simpler pattern for lines that look like grant headers
+        simple_grant_pattern = re.compile(
+            r'^(NIH|NSF|DoD|VA|CDC|Greenwall|AHRQ|PCORI)',
+            re.IGNORECASE
+        )
+
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
+            if not line:
+                i += 1
+                continue
+
+            # Check if this is a Role: line
+            role_match = re.match(r'^Role:\s*(.+)$', line, re.IGNORECASE)
+            if role_match and current_grant:
+                current_grant.role = role_match.group(1).strip()
+                i += 1
+                continue
+
+            # Try to match grant header pattern
+            header_match = grant_header_pattern.match(line)
+            if header_match:
+                # Save previous grant if exists
+                if current_grant:
+                    grants.append(current_grant)
+
+                current_grant = Grant(
+                    funder=header_match.group(1).strip(),
+                    number=header_match.group(2).strip() if header_match.group(2) else "",
+                    pi=header_match.group(3).strip() if header_match.group(3) else "",
+                    role=header_match.group(4).strip() if header_match.group(4) else "PI",
+                    dates=header_match.group(5).strip() if header_match.group(5) else ""
+                )
+                i += 1
+                continue
+
+            # Check if this looks like a grant header (starts with known funder)
+            if simple_grant_pattern.match(line):
+                # Save previous grant
+                if current_grant:
+                    grants.append(current_grant)
+
+                # Try to parse the line manually
+                current_grant = self._parse_grant_line(line)
+                i += 1
+                continue
+
+            # Otherwise, this might be a grant title
+            if current_grant and not current_grant.title:
+                current_grant.title = line
+            elif current_grant:
+                # Append to title if it continues
+                current_grant.title += " " + line
+
+            i += 1
+
+        # Don't forget the last grant
+        if current_grant:
+            grants.append(current_grant)
+
+        return grants
+
+    def _parse_grant_line(self, line: str) -> Grant:
+        """Parse a single grant header line into components."""
+        grant = Grant()
+
+        # Try to extract dates (at the end typically)
+        date_pattern = re.compile(r'(\d{1,2}/\d{1,4}\s*[-–]\s*\d{1,2}/\d{1,4})')
+        date_match = date_pattern.search(line)
+        if date_match:
+            grant.dates = date_match.group(1).strip()
+            line = line[:date_match.start()] + line[date_match.end():]
+
+        # Try to extract PI info (in parentheses)
+        pi_pattern = re.compile(r'([A-Za-z,\s]+)\s*\(([^)]+)\)')
+        pi_match = pi_pattern.search(line)
+        if pi_match:
+            grant.pi = pi_match.group(1).strip()
+            grant.role = pi_match.group(2).strip()
+            line = line[:pi_match.start()] + line[pi_match.end():]
+
+        # Split remaining into funder and number
+        parts = line.strip().split(None, 1)
+        if parts:
+            grant.funder = parts[0].strip()
+            if len(parts) > 1:
+                grant.number = parts[1].strip()
+
+        return grant
 
     def _parse_section_b(self, content: List[str]):
         """Parse Section B - Positions and Honors."""

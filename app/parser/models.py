@@ -85,25 +85,51 @@ class Honor:
 
 
 @dataclass
+class Grant:
+    """Represents a research grant/support entry."""
+    funder: str = ""
+    number: str = ""
+    pi: str = ""
+    dates: str = ""
+    title: str = ""
+    role: str = ""  # e.g., "PI", "Co-investigator", etc.
+
+    def to_dict(self) -> dict:
+        return {
+            'funder': self.funder,
+            'number': self.number,
+            'pi': self.pi,
+            'dates': self.dates,
+            'title': self.title,
+            'role': self.role
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> 'Grant':
+        return cls(**data)
+
+
+@dataclass
 class PersonalStatement:
     """Represents Section A - Personal Statement."""
     text: str
-    research_support: list[str] = field(default_factory=list)
+    grants: list[Grant] = field(default_factory=list)
     citations: list[Citation] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
             'text': self.text,
-            'research_support': self.research_support,
+            'grants': [g.to_dict() for g in self.grants],
             'citations': [c.to_dict() for c in self.citations]
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> 'PersonalStatement':
         citations = [Citation.from_dict(c) for c in data.get('citations', [])]
+        grants = [Grant.from_dict(g) for g in data.get('grants', [])]
         return cls(
             text=data['text'],
-            research_support=data.get('research_support', []),
+            grants=grants,
             citations=citations
         )
 

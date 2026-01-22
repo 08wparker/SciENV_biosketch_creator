@@ -63,21 +63,33 @@
     <!-- Personal Statement Section -->
     {% if data.personal_statement %}
     <div class="bg-white rounded-lg shadow-md p-6">
-        <h2 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-            <span class="bg-green-100 text-green-800 px-2 py-1 rounded text-sm mr-2">A</span>
-            Personal Statement
-        </h2>
-        <div class="prose max-w-none">
-            <p class="text-gray-700 mb-4">{{ data.personal_statement.text }}</p>
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold text-gray-800 flex items-center">
+                <span class="bg-green-100 text-green-800 px-2 py-1 rounded text-sm mr-2">A</span>
+                Personal Statement
+            </h2>
+            <button onclick="editPersonalStatement()" id="edit-ps-btn" class="text-blue-500 hover:text-blue-700 text-sm">Edit</button>
+        </div>
 
-            {% if data.personal_statement.research_support %}
+        <!-- Display Mode -->
+        <div id="ps-display" class="prose max-w-none">
+            <p class="text-gray-700 mb-4 whitespace-pre-wrap">{{ data.personal_statement.text }}</p>
+
+            {% if data.personal_statement.grants %}
             <div class="mt-4">
-                <h3 class="font-medium text-gray-800 mb-2">Research Support</h3>
-                <ul class="list-disc list-inside text-sm text-gray-600 space-y-1">
-                    {% for support in data.personal_statement.research_support %}
-                    <li>{{ support }}</li>
+                <h3 class="font-medium text-gray-800 mb-2">Research Support ({{ data.personal_statement.grants|length }})</h3>
+                <div class="space-y-3">
+                    {% for grant in data.personal_statement.grants %}
+                    <div class="text-sm border-l-2 border-green-200 pl-3">
+                        <div class="flex flex-wrap gap-x-4 gap-y-1 text-gray-700">
+                            <span class="font-medium">{{ grant.funder }} {{ grant.number }}</span>
+                            <span>{{ grant.pi }} ({{ grant.role }})</span>
+                            <span class="text-gray-500">{{ grant.dates }}</span>
+                        </div>
+                        <p class="text-gray-600 mt-1">{{ grant.title }}</p>
+                    </div>
                     {% endfor %}
-                </ul>
+                </div>
             </div>
             {% endif %}
 
@@ -96,6 +108,49 @@
                 </ol>
             </div>
             {% endif %}
+        </div>
+
+        <!-- Edit Mode -->
+        <div id="ps-edit" class="hidden">
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Personal Statement Text</label>
+                <textarea id="ps-text-input"
+                          class="w-full p-3 text-sm border rounded-lg focus:ring-2 focus:ring-green-300 focus:border-green-300"
+                          rows="8">{{ data.personal_statement.text }}</textarea>
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Research Support / Grants</label>
+                <div id="grants-editor" class="space-y-3">
+                    {% for grant in data.personal_statement.grants %}
+                    <div class="grant-row border rounded-lg p-3 bg-gray-50" data-index="{{ loop.index0 }}">
+                        <div class="grid grid-cols-2 md:grid-cols-3 gap-2 mb-2">
+                            <input type="text" placeholder="Funder (e.g., NIH)" value="{{ grant.funder }}"
+                                   class="grant-funder px-2 py-1 text-sm border rounded">
+                            <input type="text" placeholder="Number" value="{{ grant.number }}"
+                                   class="grant-number px-2 py-1 text-sm border rounded">
+                            <input type="text" placeholder="PI" value="{{ grant.pi }}"
+                                   class="grant-pi px-2 py-1 text-sm border rounded">
+                            <input type="text" placeholder="Role (PI, Co-I)" value="{{ grant.role }}"
+                                   class="grant-role px-2 py-1 text-sm border rounded">
+                            <input type="text" placeholder="Dates" value="{{ grant.dates }}"
+                                   class="grant-dates px-2 py-1 text-sm border rounded">
+                            <button onclick="removeGrant(this)" class="text-red-500 hover:text-red-700 text-sm">Remove</button>
+                        </div>
+                        <input type="text" placeholder="Grant Title" value="{{ grant.title }}"
+                               class="grant-title w-full px-2 py-1 text-sm border rounded">
+                    </div>
+                    {% endfor %}
+                </div>
+                <button onclick="addGrant()" class="mt-2 px-3 py-1 text-sm bg-green-100 text-green-700 rounded hover:bg-green-200">
+                    + Add Grant
+                </button>
+            </div>
+
+            <div class="flex gap-2">
+                <button onclick="savePersonalStatement()" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">Save</button>
+                <button onclick="cancelPersonalStatementEdit()" class="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400">Cancel</button>
+            </div>
         </div>
     </div>
     {% endif %}
@@ -265,10 +320,107 @@
 
 {% block extra_scripts %}
 <script>
-    // Store contributions data
+    // Store data
     let contributions = {{ data.contributions | tojson | safe }};
+    let personalStatement = {{ data.personal_statement | tojson | safe if data.personal_statement else '{}' }};
     let selectedIndices = new Set();
     const jobId = '{{ job_id }}';
+
+    // ============ Personal Statement Functions ============
+
+    function editPersonalStatement() {
+        document.getElementById('ps-display').classList.add('hidden');
+        document.getElementById('ps-edit').classList.remove('hidden');
+        document.getElementById('edit-ps-btn').classList.add('hidden');
+    }
+
+    function cancelPersonalStatementEdit() {
+        document.getElementById('ps-display').classList.remove('hidden');
+        document.getElementById('ps-edit').classList.add('hidden');
+        document.getElementById('edit-ps-btn').classList.remove('hidden');
+    }
+
+    function savePersonalStatement() {
+        // Get text
+        personalStatement.text = document.getElementById('ps-text-input').value;
+
+        // Get grants
+        const grantRows = document.querySelectorAll('.grant-row');
+        personalStatement.grants = [];
+        grantRows.forEach(row => {
+            personalStatement.grants.push({
+                funder: row.querySelector('.grant-funder').value,
+                number: row.querySelector('.grant-number').value,
+                pi: row.querySelector('.grant-pi').value,
+                role: row.querySelector('.grant-role').value,
+                dates: row.querySelector('.grant-dates').value,
+                title: row.querySelector('.grant-title').value
+            });
+        });
+
+        // Update display
+        updatePersonalStatementDisplay();
+        cancelPersonalStatementEdit();
+    }
+
+    function updatePersonalStatementDisplay() {
+        const display = document.getElementById('ps-display');
+        let grantsHtml = '';
+        if (personalStatement.grants && personalStatement.grants.length > 0) {
+            grantsHtml = `
+                <div class="mt-4">
+                    <h3 class="font-medium text-gray-800 mb-2">Research Support (${personalStatement.grants.length})</h3>
+                    <div class="space-y-3">
+                        ${personalStatement.grants.map(g => `
+                            <div class="text-sm border-l-2 border-green-200 pl-3">
+                                <div class="flex flex-wrap gap-x-4 gap-y-1 text-gray-700">
+                                    <span class="font-medium">${escapeHtml(g.funder)} ${escapeHtml(g.number)}</span>
+                                    <span>${escapeHtml(g.pi)} (${escapeHtml(g.role)})</span>
+                                    <span class="text-gray-500">${escapeHtml(g.dates)}</span>
+                                </div>
+                                <p class="text-gray-600 mt-1">${escapeHtml(g.title)}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Keep citations as-is (from original)
+        const citationsDiv = display.querySelector('.mt-4:last-child');
+        const citationsHtml = citationsDiv ? citationsDiv.outerHTML : '';
+
+        display.innerHTML = `
+            <p class="text-gray-700 mb-4 whitespace-pre-wrap">${escapeHtml(personalStatement.text)}</p>
+            ${grantsHtml}
+            ${citationsHtml}
+        `;
+    }
+
+    function addGrant() {
+        const container = document.getElementById('grants-editor');
+        const index = container.children.length;
+        const html = `
+            <div class="grant-row border rounded-lg p-3 bg-gray-50" data-index="${index}">
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-2 mb-2">
+                    <input type="text" placeholder="Funder (e.g., NIH)" class="grant-funder px-2 py-1 text-sm border rounded">
+                    <input type="text" placeholder="Number" class="grant-number px-2 py-1 text-sm border rounded">
+                    <input type="text" placeholder="PI" class="grant-pi px-2 py-1 text-sm border rounded">
+                    <input type="text" placeholder="Role (PI, Co-I)" class="grant-role px-2 py-1 text-sm border rounded">
+                    <input type="text" placeholder="Dates" class="grant-dates px-2 py-1 text-sm border rounded">
+                    <button onclick="removeGrant(this)" class="text-red-500 hover:text-red-700 text-sm">Remove</button>
+                </div>
+                <input type="text" placeholder="Grant Title" class="grant-title w-full px-2 py-1 text-sm border rounded">
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', html);
+    }
+
+    function removeGrant(btn) {
+        btn.closest('.grant-row').remove();
+    }
+
+    // ============ Contribution Functions ============
 
     function updateSelection() {
         const checkboxes = document.querySelectorAll('.contribution-checkbox:checked');
@@ -478,13 +630,14 @@
             .sort((a, b) => a - b)
             .map(idx => contributions[idx]);
 
-        // Update the data on server
+        // Update the data on server (include personal statement and contributions)
         try {
             const response = await fetch(`/api/parse/${jobId}`, {
                 method: 'PUT',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
-                    contributions: selectedContributions
+                    contributions: selectedContributions,
+                    personal_statement: personalStatement
                 })
             });
 

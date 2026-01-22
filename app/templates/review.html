@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+
+{% block title %}Review Biosketch - SciENcv Creator{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header Section -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h1 class="text-2xl font-bold text-gray-800">Review Parsed Biosketch</h1>
+            <a href="{{ url_for('main.index') }}"
+               class="text-blue-600 hover:text-blue-800 text-sm">
+                &larr; Upload Another
+            </a>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
+            <div>
+                <label class="text-sm text-gray-500">Name</label>
+                <p class="font-medium text-gray-800">{{ data.name }}</p>
+            </div>
+            <div>
+                <label class="text-sm text-gray-500">eRA Commons Username</label>
+                <p class="font-medium text-gray-800">{{ data.era_commons_username }}</p>
+            </div>
+            <div>
+                <label class="text-sm text-gray-500">Position Title</label>
+                <p class="font-medium text-gray-800 text-sm">{{ data.position_title }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Education Section -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <h2 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+            <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm mr-2">Education</span>
+            {{ data.education|length }} entries
+        </h2>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-2 text-left text-gray-600">Institution</th>
+                        <th class="px-4 py-2 text-left text-gray-600">Degree</th>
+                        <th class="px-4 py-2 text-left text-gray-600">Date</th>
+                        <th class="px-4 py-2 text-left text-gray-600">Field of Study</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y">
+                    {% for edu in data.education %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-2">{{ edu.institution }}</td>
+                        <td class="px-4 py-2">{{ edu.degree }}</td>
+                        <td class="px-4 py-2">{{ edu.completion_date }}</td>
+                        <td class="px-4 py-2">{{ edu.field_of_study }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Personal Statement Section -->
+    {% if data.personal_statement %}
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <h2 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+            <span class="bg-green-100 text-green-800 px-2 py-1 rounded text-sm mr-2">A</span>
+            Personal Statement
+        </h2>
+        <div class="prose max-w-none">
+            <p class="text-gray-700 mb-4">{{ data.personal_statement.text }}</p>
+
+            {% if data.personal_statement.research_support %}
+            <div class="mt-4">
+                <h3 class="font-medium text-gray-800 mb-2">Research Support</h3>
+                <ul class="list-disc list-inside text-sm text-gray-600 space-y-1">
+                    {% for support in data.personal_statement.research_support %}
+                    <li>{{ support }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+
+            {% if data.personal_statement.citations %}
+            <div class="mt-4">
+                <h3 class="font-medium text-gray-800 mb-2">Citations ({{ data.personal_statement.citations|length }})</h3>
+                <ol class="list-decimal list-inside text-sm text-gray-600 space-y-2">
+                    {% for citation in data.personal_statement.citations %}
+                    <li class="pl-2">
+                        {{ citation.text[:150] }}{% if citation.text|length > 150 %}...{% endif %}
+                        {% if citation.pmid %}
+                        <span class="text-blue-600">[PMID: {{ citation.pmid }}]</span>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ol>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Positions and Honors Section -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Positions -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                <span class="bg-purple-100 text-purple-800 px-2 py-1 rounded text-sm mr-2">B</span>
+                Positions ({{ data.positions|length }})
+            </h2>
+            <ul class="space-y-2 text-sm">
+                {% for pos in data.positions %}
+                <li class="border-l-2 border-purple-200 pl-3">
+                    <span class="text-gray-500">{{ pos.dates }}</span>
+                    <p class="text-gray-800">{{ pos.title }}</p>
+                    {% if pos.institution %}
+                    <p class="text-gray-600 text-xs">{{ pos.institution }}</p>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <!-- Honors -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-sm mr-2">B</span>
+                Honors ({{ data.honors|length }})
+            </h2>
+            <ul class="space-y-2 text-sm">
+                {% for honor in data.honors %}
+                <li class="border-l-2 border-yellow-200 pl-3">
+                    <span class="text-gray-500">{{ honor.year }}</span>
+                    <p class="text-gray-800">{{ honor.description[:100] }}{% if honor.description|length > 100 %}...{% endif %}</p>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <!-- Contributions to Science Section -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <h2 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+            <span class="bg-orange-100 text-orange-800 px-2 py-1 rounded text-sm mr-2">C</span>
+            Contributions to Science ({{ data.contributions|length }})
+        </h2>
+        <div class="space-y-6">
+            {% for contrib in data.contributions[:5] %}
+            <div class="border-l-4 border-orange-200 pl-4">
+                <p class="text-gray-700 mb-2">{{ contrib.narrative[:300] }}{% if contrib.narrative|length > 300 %}...{% endif %}</p>
+                {% if contrib.citations %}
+                <div class="mt-2">
+                    <span class="text-sm text-gray-500">{{ contrib.citations|length }} citation(s)</span>
+                    <ul class="text-xs text-gray-600 mt-1 space-y-1">
+                        {% for citation in contrib.citations[:3] %}
+                        <li class="truncate">{{ citation.text[:100] }}...</li>
+                        {% endfor %}
+                        {% if contrib.citations|length > 3 %}
+                        <li class="text-blue-600">+ {{ contrib.citations|length - 3 }} more</li>
+                        {% endif %}
+                    </ul>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+            {% if data.contributions|length > 5 %}
+            <p class="text-sm text-gray-500 italic">
+                Note: NIH limits biosketches to 5 contributions. Only the first 5 will be used.
+            </p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <div class="flex flex-col sm:flex-row gap-4 items-center justify-between">
+            <div class="text-sm text-gray-600">
+                <p class="font-medium">Ready to create your SciENcv entry?</p>
+                <p class="text-xs">A browser window will open. You'll need to log in to SciENcv manually.</p>
+            </div>
+            <div class="flex gap-4">
+                <a href="{{ url_for('api.get_parsed_data', job_id=job_id) }}"
+                   target="_blank"
+                   class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">
+                    View JSON
+                </a>
+                <button onclick="startAutomation('{{ job_id }}')"
+                        class="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                    Start SciENcv Automation
+                </button>
+            </div>
+        </div>
+        <div id="automation-status" class="mt-4 hidden">
+            <div class="p-4 bg-blue-50 rounded-lg">
+                <p class="text-blue-800" id="status-message">Starting automation...</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    async function startAutomation(jobId) {
+        const statusDiv = document.getElementById('automation-status');
+        const statusMsg = document.getElementById('status-message');
+        statusDiv.classList.remove('hidden');
+        statusMsg.textContent = 'Starting automation...';
+
+        try {
+            const response = await fetch(`/api/automate/${jobId}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'}
+            });
+            const data = await response.json();
+
+            if (data.status === 'started') {
+                statusMsg.textContent = data.message;
+                statusDiv.className = 'mt-4 p-4 bg-green-50 rounded-lg';
+                statusMsg.className = 'text-green-800';
+            } else {
+                statusMsg.textContent = data.error || 'Failed to start automation';
+                statusDiv.className = 'mt-4 p-4 bg-red-50 rounded-lg';
+                statusMsg.className = 'text-red-800';
+            }
+        } catch (error) {
+            statusMsg.textContent = 'Error: ' + error.message;
+            statusDiv.className = 'mt-4 p-4 bg-red-50 rounded-lg';
+            statusMsg.className = 'text-red-800';
+        }
+    }
+</script>
+{% endblock %}

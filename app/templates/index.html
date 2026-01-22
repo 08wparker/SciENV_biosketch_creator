@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Biosketch - SciENcv Creator{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <div class="bg-white rounded-lg shadow-md p-8">
+        <h1 class="text-2xl font-bold text-gray-800 mb-6">Upload Your NIH Biosketch</h1>
+
+        <div class="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <h2 class="font-semibold text-blue-800 mb-2">How it works</h2>
+            <ol class="list-decimal list-inside text-blue-700 space-y-1 text-sm">
+                <li>Upload your NIH biosketch Word document (.docx)</li>
+                <li>Review and edit the parsed data</li>
+                <li>Connect to SciENcv (you'll log in manually for security)</li>
+                <li>Automation fills in your biosketch entry</li>
+            </ol>
+        </div>
+
+        <form id="upload-form"
+              hx-post="{{ url_for('api.upload_file') }}"
+              hx-encoding="multipart/form-data"
+              hx-target="#result"
+              hx-indicator="#loading"
+              class="space-y-6">
+
+            <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-500 transition-colors"
+                 id="drop-zone">
+                <input type="file"
+                       name="file"
+                       id="file-input"
+                       accept=".docx"
+                       class="hidden"
+                       required>
+                <label for="file-input" class="cursor-pointer">
+                    <div class="space-y-4">
+                        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                        </svg>
+                        <div class="text-gray-600">
+                            <span class="text-blue-600 font-medium">Click to upload</span>
+                            or drag and drop
+                        </div>
+                        <p class="text-sm text-gray-500" id="file-name">
+                            NIH Biosketch (.docx file)
+                        </p>
+                    </div>
+                </label>
+            </div>
+
+            <button type="submit"
+                    class="w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    id="submit-btn"
+                    disabled>
+                <span id="btn-text">Upload and Parse</span>
+                <span id="loading" class="htmx-indicator">
+                    <svg class="inline animate-spin h-5 w-5 ml-2" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                    </svg>
+                </span>
+            </button>
+        </form>
+
+        <div id="result" class="mt-6"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // File input handling
+    const fileInput = document.getElementById('file-input');
+    const fileName = document.getElementById('file-name');
+    const submitBtn = document.getElementById('submit-btn');
+    const dropZone = document.getElementById('drop-zone');
+
+    fileInput.addEventListener('change', function(e) {
+        if (this.files.length > 0) {
+            fileName.textContent = this.files[0].name;
+            submitBtn.disabled = false;
+            dropZone.classList.add('border-blue-500', 'bg-blue-50');
+        }
+    });
+
+    // Drag and drop
+    dropZone.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        this.classList.add('border-blue-500', 'bg-blue-50');
+    });
+
+    dropZone.addEventListener('dragleave', function(e) {
+        if (!fileInput.files.length) {
+            this.classList.remove('border-blue-500', 'bg-blue-50');
+        }
+    });
+
+    dropZone.addEventListener('drop', function(e) {
+        e.preventDefault();
+        const files = e.dataTransfer.files;
+        if (files.length > 0 && files[0].name.endsWith('.docx')) {
+            fileInput.files = files;
+            fileName.textContent = files[0].name;
+            submitBtn.disabled = false;
+        }
+    });
+
+    // Handle HTMX response
+    document.body.addEventListener('htmx:afterRequest', function(evt) {
+        if (evt.detail.successful) {
+            try {
+                const response = JSON.parse(evt.detail.xhr.responseText);
+                if (response.redirect) {
+                    window.location.href = response.redirect;
+                } else if (response.error) {
+                    document.getElementById('result').innerHTML =
+                        '<div class="p-4 bg-red-50 text-red-700 rounded-lg">' + response.error + '</div>';
+                }
+            } catch (e) {
+                console.error('Error parsing response', e);
+            }
+        }
+    });
+</script>
+{% endblock %}

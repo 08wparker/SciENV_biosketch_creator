@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_APP=app
+      - FLASK_ENV=development
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key}
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ./uploads:/app/uploads
+      - ./browser_state:/app/browser_state
+    depends_on:
+      - redis
+    networks:
+      - sciencv-network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - sciencv-network
+
+  # Celery worker for background tasks (optional)
+  worker:
+    build: .
+    command: celery -A app.celery worker --loglevel=info
+    environment:
+      - FLASK_APP=app
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ./uploads:/app/uploads
+      - ./browser_state:/app/browser_state
+    depends_on:
+      - redis
+      - web
+    networks:
+      - sciencv-network
+
+volumes:
+  redis-data:
+
+networks:
+  sciencv-network:
+    driver: bridge

@@ -60,6 +60,7 @@ htmlcov/
 # Personal biosketch files
 biosketch_example/
 screenshots/
+NIH_instructions/
 
 # Word temp files
 ~$*

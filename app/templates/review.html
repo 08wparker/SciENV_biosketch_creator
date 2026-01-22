@@ -138,36 +138,99 @@
         </div>
     </div>
 
-    <!-- Contributions to Science Section -->
+    <!-- Contributions to Science Section - Interactive -->
     <div class="bg-white rounded-lg shadow-md p-6">
-        <h2 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-            <span class="bg-orange-100 text-orange-800 px-2 py-1 rounded text-sm mr-2">C</span>
-            Contributions to Science ({{ data.contributions|length }})
-        </h2>
-        <div class="space-y-6">
-            {% for contrib in data.contributions[:5] %}
-            <div class="border-l-4 border-orange-200 pl-4">
-                <p class="text-gray-700 mb-2">{{ contrib.narrative[:300] }}{% if contrib.narrative|length > 300 %}...{% endif %}</p>
-                {% if contrib.citations %}
-                <div class="mt-2">
-                    <span class="text-sm text-gray-500">{{ contrib.citations|length }} citation(s)</span>
-                    <ul class="text-xs text-gray-600 mt-1 space-y-1">
-                        {% for citation in contrib.citations[:3] %}
-                        <li class="truncate">{{ citation.text[:100] }}...</li>
-                        {% endfor %}
-                        {% if contrib.citations|length > 3 %}
-                        <li class="text-blue-600">+ {{ contrib.citations|length - 3 }} more</li>
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold text-gray-800 flex items-center">
+                <span class="bg-orange-100 text-orange-800 px-2 py-1 rounded text-sm mr-2">C</span>
+                Contributions to Science
+                <span class="ml-2 text-sm font-normal text-gray-500">
+                    (<span id="selected-count">0</span>/5 selected)
+                </span>
+            </h2>
+            <div class="flex gap-2">
+                <button onclick="mergeSelected()"
+                        class="px-3 py-1 text-sm bg-orange-100 text-orange-700 rounded hover:bg-orange-200 transition-colors"
+                        id="merge-btn" disabled>
+                    Merge Selected
+                </button>
+            </div>
+        </div>
+
+        <div class="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+            <strong>Instructions:</strong> The parser may have split your contributions incorrectly.
+            Use the checkboxes to select items to merge, then click "Merge Selected".
+            Select exactly 5 contributions to use for your SciENcv entry.
+        </div>
+
+        <div id="contributions-list" class="space-y-3">
+            {% for contrib in data.contributions %}
+            <div class="contribution-item border rounded-lg p-4 hover:border-orange-300 transition-colors"
+                 data-index="{{ loop.index0 }}">
+                <div class="flex items-start gap-3">
+                    <div class="flex flex-col items-center gap-1 pt-1">
+                        <input type="checkbox"
+                               class="contribution-checkbox w-5 h-5 text-orange-600 rounded"
+                               data-index="{{ loop.index0 }}"
+                               onchange="updateSelection()">
+                        <button onclick="moveUp({{ loop.index0 }})"
+                                class="text-gray-400 hover:text-gray-600 p-1" title="Move up">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                            </svg>
+                        </button>
+                        <button onclick="moveDown({{ loop.index0 }})"
+                                class="text-gray-400 hover:text-gray-600 p-1" title="Move down">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="inline-flex items-center justify-center w-6 h-6 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">
+                                {{ loop.index }}
+                            </span>
+                            <span class="text-xs text-gray-400">
+                                {{ contrib.citations|length }} citation(s)
+                            </span>
+                            <button onclick="deleteContribution({{ loop.index0 }})"
+                                    class="ml-auto text-red-400 hover:text-red-600 text-xs">
+                                Delete
+                            </button>
+                        </div>
+                        <p class="text-gray-700 text-sm contribution-narrative">{{ contrib.narrative }}</p>
+                        {% if contrib.citations %}
+                        <div class="mt-2 pl-4 border-l-2 border-gray-200">
+                            <ul class="text-xs text-gray-500 space-y-1">
+                                {% for citation in contrib.citations %}
+                                <li class="truncate" title="{{ citation.text }}">
+                                    {{ citation.text[:80] }}...
+                                    {% if citation.pmid %}<span class="text-blue-500">[PMID: {{ citation.pmid }}]</span>{% endif %}
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
                         {% endif %}
-                    </ul>
+                    </div>
                 </div>
-                {% endif %}
             </div>
             {% endfor %}
-            {% if data.contributions|length > 5 %}
-            <p class="text-sm text-gray-500 italic">
-                Note: NIH limits biosketches to 5 contributions. Only the first 5 will be used.
-            </p>
-            {% endif %}
+        </div>
+
+        <div class="mt-4 p-4 bg-gray-50 rounded-lg">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-700">Selected Contributions for SciENcv:</p>
+                    <p class="text-xs text-gray-500">NIH limits biosketches to 5 contributions</p>
+                </div>
+                <div id="selection-status" class="text-sm">
+                    <span class="text-amber-600">Select 5 contributions to continue</span>
+                </div>
+            </div>
+            <div id="selected-preview" class="mt-3 space-y-2">
+                <!-- Selected items will appear here -->
+            </div>
         </div>
     </div>
 
@@ -184,9 +247,10 @@
                    class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">
                     View JSON
                 </a>
-                <button onclick="startAutomation('{{ job_id }}')"
-                        class="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
-                    Start SciENcv Automation
+                <button onclick="saveAndContinue()"
+                        id="continue-btn"
+                        class="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    Save & Start Automation
                 </button>
             </div>
         </div>
@@ -201,6 +265,202 @@
 
 {% block extra_scripts %}
 <script>
+    // Store contributions data
+    let contributions = {{ data.contributions | tojson | safe }};
+    let selectedIndices = new Set();
+    const jobId = '{{ job_id }}';
+
+    function updateSelection() {
+        const checkboxes = document.querySelectorAll('.contribution-checkbox:checked');
+        selectedIndices = new Set([...checkboxes].map(cb => parseInt(cb.dataset.index)));
+
+        // Update count
+        document.getElementById('selected-count').textContent = selectedIndices.size;
+
+        // Update merge button
+        const mergeBtn = document.getElementById('merge-btn');
+        mergeBtn.disabled = selectedIndices.size < 2;
+
+        // Update status
+        const status = document.getElementById('selection-status');
+        const continueBtn = document.getElementById('continue-btn');
+
+        if (selectedIndices.size === 5) {
+            status.innerHTML = '<span class="text-green-600">5 contributions selected - ready!</span>';
+            continueBtn.disabled = false;
+        } else if (selectedIndices.size > 5) {
+            status.innerHTML = '<span class="text-red-600">Too many selected (max 5)</span>';
+            continueBtn.disabled = true;
+        } else {
+            status.innerHTML = `<span class="text-amber-600">Select ${5 - selectedIndices.size} more contribution(s)</span>`;
+            continueBtn.disabled = true;
+        }
+
+        // Update preview
+        updatePreview();
+    }
+
+    function updatePreview() {
+        const preview = document.getElementById('selected-preview');
+        if (selectedIndices.size === 0) {
+            preview.innerHTML = '<p class="text-gray-400 text-sm italic">No contributions selected</p>';
+            return;
+        }
+
+        const items = [...selectedIndices].sort((a, b) => a - b).map((idx, i) => {
+            const c = contributions[idx];
+            const shortNarrative = c.narrative.substring(0, 100) + (c.narrative.length > 100 ? '...' : '');
+            return `<div class="flex items-center gap-2 text-sm">
+                <span class="w-5 h-5 bg-green-100 text-green-700 rounded-full flex items-center justify-center text-xs">${i + 1}</span>
+                <span class="text-gray-600 truncate">${shortNarrative}</span>
+            </div>`;
+        });
+
+        preview.innerHTML = items.join('');
+    }
+
+    function mergeSelected() {
+        if (selectedIndices.size < 2) return;
+
+        const indices = [...selectedIndices].sort((a, b) => a - b);
+        const first = indices[0];
+
+        // Combine narratives and citations
+        let combinedNarrative = '';
+        let combinedCitations = [];
+
+        indices.forEach(idx => {
+            const c = contributions[idx];
+            if (combinedNarrative) combinedNarrative += '\n\n';
+            combinedNarrative += c.narrative;
+            combinedCitations = combinedCitations.concat(c.citations || []);
+        });
+
+        // Update first contribution
+        contributions[first] = {
+            narrative: combinedNarrative,
+            citations: combinedCitations
+        };
+
+        // Remove other merged contributions (in reverse order to maintain indices)
+        indices.slice(1).reverse().forEach(idx => {
+            contributions.splice(idx, 1);
+        });
+
+        // Clear selection and re-render
+        selectedIndices.clear();
+        renderContributions();
+        updateSelection();
+    }
+
+    function moveUp(index) {
+        if (index === 0) return;
+        [contributions[index - 1], contributions[index]] = [contributions[index], contributions[index - 1]];
+        renderContributions();
+    }
+
+    function moveDown(index) {
+        if (index >= contributions.length - 1) return;
+        [contributions[index], contributions[index + 1]] = [contributions[index + 1], contributions[index]];
+        renderContributions();
+    }
+
+    function deleteContribution(index) {
+        if (!confirm('Delete this contribution?')) return;
+        contributions.splice(index, 1);
+        selectedIndices.delete(index);
+        // Adjust indices for items after deleted one
+        const newSelected = new Set();
+        selectedIndices.forEach(i => {
+            if (i < index) newSelected.add(i);
+            else if (i > index) newSelected.add(i - 1);
+        });
+        selectedIndices = newSelected;
+        renderContributions();
+        updateSelection();
+    }
+
+    function renderContributions() {
+        const container = document.getElementById('contributions-list');
+        container.innerHTML = contributions.map((contrib, idx) => {
+            const isChecked = selectedIndices.has(idx) ? 'checked' : '';
+            const citationsHtml = (contrib.citations || []).map(c => {
+                const pmidBadge = c.pmid ? `<span class="text-blue-500">[PMID: ${c.pmid}]</span>` : '';
+                return `<li class="truncate" title="${escapeHtml(c.text)}">${escapeHtml(c.text.substring(0, 80))}... ${pmidBadge}</li>`;
+            }).join('');
+
+            return `
+            <div class="contribution-item border rounded-lg p-4 hover:border-orange-300 transition-colors" data-index="${idx}">
+                <div class="flex items-start gap-3">
+                    <div class="flex flex-col items-center gap-1 pt-1">
+                        <input type="checkbox"
+                               class="contribution-checkbox w-5 h-5 text-orange-600 rounded"
+                               data-index="${idx}"
+                               ${isChecked}
+                               onchange="updateSelection()">
+                        <button onclick="moveUp(${idx})" class="text-gray-400 hover:text-gray-600 p-1" title="Move up">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                            </svg>
+                        </button>
+                        <button onclick="moveDown(${idx})" class="text-gray-400 hover:text-gray-600 p-1" title="Move down">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="inline-flex items-center justify-center w-6 h-6 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">${idx + 1}</span>
+                            <span class="text-xs text-gray-400">${(contrib.citations || []).length} citation(s)</span>
+                            <button onclick="deleteContribution(${idx})" class="ml-auto text-red-400 hover:text-red-600 text-xs">Delete</button>
+                        </div>
+                        <p class="text-gray-700 text-sm contribution-narrative">${escapeHtml(contrib.narrative)}</p>
+                        ${citationsHtml ? `
+                        <div class="mt-2 pl-4 border-l-2 border-gray-200">
+                            <ul class="text-xs text-gray-500 space-y-1">${citationsHtml}</ul>
+                        </div>` : ''}
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    async function saveAndContinue() {
+        if (selectedIndices.size !== 5) {
+            alert('Please select exactly 5 contributions');
+            return;
+        }
+
+        const selectedContributions = [...selectedIndices]
+            .sort((a, b) => a - b)
+            .map(idx => contributions[idx]);
+
+        // Update the data on server
+        try {
+            const response = await fetch(`/api/parse/${jobId}`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    contributions: selectedContributions
+                })
+            });
+
+            if (!response.ok) throw new Error('Failed to save');
+
+            // Start automation
+            startAutomation(jobId);
+        } catch (error) {
+            alert('Error saving changes: ' + error.message);
+        }
+    }
+
     async function startAutomation(jobId) {
         const statusDiv = document.getElementById('automation-status');
         const statusMsg = document.getElementById('status-message');
@@ -229,5 +489,10 @@
             statusMsg.className = 'text-red-800';
         }
     }
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+        updateSelection();
+    });
 </script>
 {% endblock %}

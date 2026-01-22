@@ -56,3 +56,10 @@ htmlcov/
 
 # Logs
 *.log
+
+# Personal biosketch files
+biosketch_example/
+screenshots/
+
+# Word temp files
+~$*

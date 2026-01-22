@@ -6,6 +6,7 @@ import uuid
 import json
 from pathlib import Path
 from flask import Blueprint, request, jsonify, render_template, current_app, redirect, url_for
+from flask_login import current_user, login_required
 from werkzeug.utils import secure_filename
 
 from ..parser import BiosketchParser, BiosketchData
@@ -15,7 +16,7 @@ from ..parser import BiosketchParser, BiosketchData
 api_bp = Blueprint('api', __name__)
 main_bp = Blueprint('main', __name__)
 
-# In-memory storage for parsed data (in production, use Redis or database)
+# In-memory storage for parsed data (fallback for non-logged-in users)
 parsed_data_store = {}
 
 
@@ -30,6 +31,43 @@ def get_upload_path(filename: str) -> Path:
     return Path(current_app.config['UPLOAD_FOLDER']) / filename
 
 
+def get_biosketch_data(job_id: str):
+    """Get biosketch data from database or memory."""
+    if current_user.is_authenticated:
+        from ..models import SavedBiosketch
+        biosketch = SavedBiosketch.query.filter_by(job_id=job_id, user_id=current_user.id).first()
+        if biosketch:
+            return biosketch.data
+    return parsed_data_store.get(job_id)
+
+
+def save_biosketch_data(job_id: str, data: dict, selected_contributions=None, selected_products=None):
+    """Save biosketch data to database or memory."""
+    if current_user.is_authenticated:
+        from ..models import db, SavedBiosketch
+        biosketch = SavedBiosketch.query.filter_by(job_id=job_id, user_id=current_user.id).first()
+        if biosketch:
+            biosketch.data = data
+            if selected_contributions is not None:
+                biosketch.selected_contributions = selected_contributions
+            if selected_products is not None:
+                biosketch.selected_products = selected_products
+            biosketch.name = data.get('name', 'Unnamed Biosketch')
+        else:
+            biosketch = SavedBiosketch(
+                job_id=job_id,
+                user_id=current_user.id,
+                data=data,
+                name=data.get('name', 'Unnamed Biosketch'),
+                selected_contributions=selected_contributions,
+                selected_products=selected_products
+            )
+            db.session.add(biosketch)
+        db.session.commit()
+    else:
+        parsed_data_store[job_id] = data
+
+
 # ============ Main Routes ============
 
 @main_bp.route('/')
@@ -41,11 +79,25 @@ def index():
 @main_bp.route('/review/<job_id>')
 def review(job_id: str):
     """Render the review page for parsed biosketch data."""
-    if job_id not in parsed_data_store:
+    data = get_biosketch_data(job_id)
+    if not data:
         return render_template('error.html', message='Job not found'), 404
 
-    data = parsed_data_store[job_id]
-    return render_template('review.html', job_id=job_id, data=data)
+    # Get selected items if user is logged in
+    selected_contributions = []
+    selected_products = []
+    if current_user.is_authenticated:
+        from ..models import SavedBiosketch
+        biosketch = SavedBiosketch.query.filter_by(job_id=job_id, user_id=current_user.id).first()
+        if biosketch:
+            selected_contributions = biosketch.selected_contributions or []
+            selected_products = biosketch.selected_products or []
+
+    return render_template('review.html',
+                           job_id=job_id,
+                           data=data,
+                           selected_contributions=selected_contributions,
+                           selected_products=selected_products)
 
 
 # ============ API Routes ============
@@ -76,7 +128,10 @@ def upload_file():
     try:
         parser = BiosketchParser(filepath)
         data = parser.parse()
-        parsed_data_store[job_id] = data.to_dict()
+        data_dict = data.to_dict()
+
+        # Save to database or memory
+        save_biosketch_data(job_id, data_dict)
 
         return jsonify({
             'job_id': job_id,
@@ -90,16 +145,18 @@ def upload_file():
 @api_bp.route('/parse/<job_id>', methods=['GET'])
 def get_parsed_data(job_id: str):
     """Get the parsed biosketch data for a job."""
-    if job_id not in parsed_data_store:
+    data = get_biosketch_data(job_id)
+    if not data:
         return jsonify({'error': 'Job not found'}), 404
 
-    return jsonify(parsed_data_store[job_id])
+    return jsonify(data)
 
 
 @api_bp.route('/parse/<job_id>', methods=['PUT'])
 def update_parsed_data(job_id: str):
     """Update the parsed biosketch data (for manual edits)."""
-    if job_id not in parsed_data_store:
+    current_data = get_biosketch_data(job_id)
+    if not current_data:
         return jsonify({'error': 'Job not found'}), 404
 
     data = request.get_json()
@@ -109,19 +166,41 @@ def update_parsed_data(job_id: str):
     # Validate and update
     try:
         # Merge updated fields
-        current_data = parsed_data_store[job_id]
         current_data.update(data)
-        parsed_data_store[job_id] = current_data
+
+        # Extract selected items
+        selected_contributions = data.get('selected_contributions')
+        selected_products = data.get('selected_products')
+
+        # Save updated data
+        save_biosketch_data(job_id, current_data, selected_contributions, selected_products)
 
         return jsonify({'status': 'success', 'data': current_data})
     except Exception as e:
         return jsonify({'error': f'Failed to update data: {str(e)}'}), 500
 
 
+@api_bp.route('/biosketch/<job_id>', methods=['DELETE'])
+@login_required
+def delete_biosketch(job_id: str):
+    """Delete a saved biosketch."""
+    from ..models import db, SavedBiosketch
+    biosketch = SavedBiosketch.query.filter_by(job_id=job_id, user_id=current_user.id).first()
+
+    if not biosketch:
+        return jsonify({'error': 'Biosketch not found'}), 404
+
+    db.session.delete(biosketch)
+    db.session.commit()
+
+    return jsonify({'status': 'success'})
+
+
 @api_bp.route('/automate/<job_id>', methods=['POST'])
 def start_automation(job_id: str):
     """Start the SciENcv automation process."""
-    if job_id not in parsed_data_store:
+    data = get_biosketch_data(job_id)
+    if not data:
         return jsonify({'error': 'Job not found'}), 404
 
     # In a full implementation, this would trigger a Celery task

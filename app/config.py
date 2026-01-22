@@ -11,6 +11,10 @@ class Config:
     MAX_CONTENT_LENGTH = int(os.environ.get('MAX_CONTENT_LENGTH', 16 * 1024 * 1024))  # 16MB
     ALLOWED_EXTENSIONS = {'docx'}
 
+    # Database configuration
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', 'sqlite:///sciencv.db')
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+
     # Redis configuration
     REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
 

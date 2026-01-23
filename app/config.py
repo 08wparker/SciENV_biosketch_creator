@@ -11,11 +11,18 @@ class Config:
     MAX_CONTENT_LENGTH = int(os.environ.get('MAX_CONTENT_LENGTH', 16 * 1024 * 1024))  # 16MB
     ALLOWED_EXTENSIONS = {'docx'}
 
-    # Database configuration
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', 'sqlite:///sciencv.db')
-    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    # Firebase configuration
+    FIREBASE_CREDENTIALS = os.environ.get('FIREBASE_CREDENTIALS', 'firebase-service-account.json')
+    FIREBASE_PROJECT_ID = os.environ.get('FIREBASE_PROJECT_ID', '')
 
-    # Redis configuration
+    # Firebase Web Config (for frontend) - set these from your Firebase Console
+    FIREBASE_API_KEY = os.environ.get('FIREBASE_API_KEY', '')
+    FIREBASE_AUTH_DOMAIN = os.environ.get('FIREBASE_AUTH_DOMAIN', '')
+    FIREBASE_STORAGE_BUCKET = os.environ.get('FIREBASE_STORAGE_BUCKET', '')
+    FIREBASE_MESSAGING_SENDER_ID = os.environ.get('FIREBASE_MESSAGING_SENDER_ID', '')
+    FIREBASE_APP_ID = os.environ.get('FIREBASE_APP_ID', '')
+
+    # Redis configuration (optional for task queue)
     REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
 
     # Playwright configuration
@@ -36,6 +43,7 @@ class ProductionConfig(Config):
     """Production configuration."""
     DEBUG = False
     ENV = 'production'
+    # In production, Firebase credentials come from environment or default credentials
 
 
 class TestingConfig(Config):

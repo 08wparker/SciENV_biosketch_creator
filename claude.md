@@ -26,6 +26,11 @@ When working on this project, always refer to these resources for understanding 
   - NIH Biographical Sketch Supplement (Personal Statement, Honors, Contributions to Science)
   - Edit/Delete controls for each entry
 
+### Design Assets
+- **Location**: `website_design_items/`
+- **HCA Lab Logo**: `hca_lab_logo.png` - Health Care Allocations Lab logo (used in nav)
+- **CLIF Logo**: `CLIF_logo.png` - CLIF Consortium logo (used in nav and footer)
+
 ## Key Implementation Rules
 
 ### Products Section
@@ -53,7 +58,68 @@ When working on this project, always refer to these resources for understanding 
 - Each section has "ADD" buttons and Edit/Delete icons for entries
 - Products are selected via "SELECT RELATED PRODUCTS" and "SELECT OTHER PRODUCTS" buttons
 
-## Database
-- SQLite database located at: `instance/sciencv.db`
-- Contains User and SavedBiosketch tables
-- Logged-in users can save and resume editing biosketches
+## Backend Architecture
+
+### Authentication (Firebase Auth)
+- **Provider**: Firebase Authentication
+- **Methods**: Email/Password and Google Sign-In
+- **Frontend**: Firebase JS SDK (client-side auth)
+- **Backend**: Firebase Admin SDK (token verification)
+- **Key files**:
+  - `app/firebase_config.py` - Firebase Admin SDK initialization and auth decorators
+  - `app/api/auth.py` - Auth routes and API endpoints
+- **Decorators**:
+  - `@firebase_auth_required` - Requires valid Firebase ID token
+  - `@firebase_auth_optional` - Works with or without authentication
+
+### Database (Cloud Firestore)
+- **Provider**: Google Cloud Firestore
+- **Collection**: `biosketches`
+- **Document structure**:
+  ```
+  biosketches/{job_id}
+    - job_id: string
+    - user_id: string (Firebase Auth UID)
+    - name: string
+    - data: map (full parsed biosketch)
+    - selected_contributions: array
+    - selected_products: map { related: array, other: array }
+    - created_at: timestamp
+    - updated_at: timestamp
+  ```
+- **Key files**:
+  - `app/firestore_models.py` - CRUD operations for Firestore
+
+### Environment Variables
+Required in `.env` file:
+```
+# Flask
+SECRET_KEY=your-secret-key
+FLASK_ENV=development
+
+# Firebase Admin SDK
+FIREBASE_CREDENTIALS=firebase-service-account.json
+FIREBASE_PROJECT_ID=sciencv-biosketch
+
+# Firebase Web Config (for frontend)
+FIREBASE_API_KEY=...
+FIREBASE_AUTH_DOMAIN=sciencv-biosketch.firebaseapp.com
+FIREBASE_STORAGE_BUCKET=sciencv-biosketch.firebasestorage.app
+FIREBASE_MESSAGING_SENDER_ID=...
+FIREBASE_APP_ID=...
+```
+
+### Deployment
+- **Target**: Google Cloud Run
+- **Dockerfile**: Configured for Cloud Run with gunicorn
+- **Port**: 8080 (Cloud Run default)
+
+## Branding
+
+### Color Scheme
+- **Primary**: UChicago Maroon (#800000)
+- **Tailwind class**: `maroon-700` (custom color defined in base.html)
+
+### Links
+- **HCA Lab**: https://voices.uchicago.edu/healthallocate/
+- **CLIF Consortium**: https://clif-icu.com/

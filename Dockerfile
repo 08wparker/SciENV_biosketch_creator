@@ -1,11 +1,11 @@
-# SciENcv Biosketch Creator
+# SciENcv Biosketch Creator - Cloud Run Dockerfile
 FROM python:3.11-slim
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV FLASK_APP=app
-ENV FLASK_ENV=production
+ENV PORT=8080
 
 # Set work directory
 WORKDIR /app
@@ -14,6 +14,8 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
+    ca-certificates \
+    fonts-liberation \
     libglib2.0-0 \
     libnss3 \
     libnspr4 \
@@ -32,6 +34,11 @@ RUN apt-get update && apt-get install -y \
     libasound2 \
     libpango-1.0-0 \
     libcairo2 \
+    libx11-6 \
+    libxcb1 \
+    libxext6 \
+    libgtk-3-0 \
+    xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for caching
@@ -47,10 +54,15 @@ RUN playwright install chromium
 COPY . .
 
 # Create necessary directories
-RUN mkdir -p uploads browser_state
+RUN mkdir -p uploads browser_state && chmod 777 uploads browser_state
 
-# Expose port
-EXPOSE 5000
+# Create non-root user for security
+RUN adduser --disabled-password --gecos '' appuser && \
+    chown -R appuser:appuser /app
+USER appuser
 
-# Run the application
-CMD ["python", "-m", "flask", "run", "--host=0.0.0.0"]
+# Expose port (Cloud Run uses 8080 by default)
+EXPOSE 8080
+
+# Run with gunicorn for production
+CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 "app:create_app('production')"

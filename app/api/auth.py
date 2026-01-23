@@ -1,97 +1,98 @@
-"""Authentication routes for user login, registration, and logout."""
+"""Authentication routes for Firebase Auth.
+
+Authentication is handled client-side with Firebase JS SDK.
+Server-side routes verify tokens and provide profile data.
+"""
 
 from __future__ import annotations
-from flask import Blueprint, request, render_template, redirect, url_for, flash
-from flask_login import login_user, logout_user, login_required, current_user
+from flask import Blueprint, request, render_template, redirect, url_for, jsonify, g
 
-from ..models import db, User
+from ..firebase_config import firebase_auth_required, get_user_info
+from ..firestore_models import get_user_biosketches
 
 auth_bp = Blueprint('auth', __name__)
 
 
-@auth_bp.route('/login', methods=['GET', 'POST'])
+@auth_bp.route('/login')
 def login():
-    """Handle user login."""
-    if current_user.is_authenticated:
-        return redirect(url_for('main.index'))
+    """Render the login page.
 
-    if request.method == 'POST':
-        email = request.form.get('email', '').strip().lower()
-        password = request.form.get('password', '')
-        remember = request.form.get('remember', False)
-
-        user = User.query.filter_by(email=email).first()
-
-        if user and user.check_password(password):
-            login_user(user, remember=remember)
-            next_page = request.args.get('next')
-            flash('Logged in successfully.', 'success')
-            return redirect(next_page or url_for('main.index'))
-        else:
-            flash('Invalid email or password.', 'error')
-
+    Actual authentication is handled client-side with Firebase JS SDK.
+    """
     return render_template('auth/login.html')
 
 
-@auth_bp.route('/register', methods=['GET', 'POST'])
+@auth_bp.route('/register')
 def register():
-    """Handle user registration."""
-    if current_user.is_authenticated:
-        return redirect(url_for('main.index'))
+    """Render the registration page.
 
-    if request.method == 'POST':
-        email = request.form.get('email', '').strip().lower()
-        password = request.form.get('password', '')
-        confirm_password = request.form.get('confirm_password', '')
-        name = request.form.get('name', '').strip()
-
-        # Validation
-        errors = []
-        if not email:
-            errors.append('Email is required.')
-        if not password:
-            errors.append('Password is required.')
-        if len(password) < 6:
-            errors.append('Password must be at least 6 characters.')
-        if password != confirm_password:
-            errors.append('Passwords do not match.')
-
-        # Check if email already exists
-        if User.query.filter_by(email=email).first():
-            errors.append('Email already registered.')
-
-        if errors:
-            for error in errors:
-                flash(error, 'error')
-            return render_template('auth/register.html', email=email, name=name)
-
-        # Create user
-        user = User(email=email, name=name)
-        user.set_password(password)
-        db.session.add(user)
-        db.session.commit()
-
-        flash('Registration successful! Please log in.', 'success')
-        return redirect(url_for('auth.login'))
-
+    Actual registration is handled client-side with Firebase JS SDK.
+    """
     return render_template('auth/register.html')
 
 
 @auth_bp.route('/logout')
-@login_required
 def logout():
-    """Handle user logout."""
-    logout_user()
-    flash('You have been logged out.', 'info')
+    """Render logout page.
+
+    Actual logout is handled client-side with Firebase JS SDK.
+    """
     return redirect(url_for('main.index'))
 
 
 @auth_bp.route('/profile')
-@login_required
 def profile():
-    """Show user profile and saved biosketches."""
-    from ..models import SavedBiosketch
-    biosketches = SavedBiosketch.query.filter_by(user_id=current_user.id).order_by(
-        SavedBiosketch.updated_at.desc()
-    ).all()
-    return render_template('auth/profile.html', biosketches=biosketches)
+    """Render the profile page.
+
+    User data and biosketches are loaded client-side via API calls.
+    """
+    return render_template('auth/profile.html')
+
+
+# ============ API Endpoints for Firebase Auth ============
+
+@auth_bp.route('/api/me')
+@firebase_auth_required
+def get_current_user():
+    """Get current user info from Firebase Auth.
+
+    Requires valid Firebase ID token in Authorization header.
+    """
+    user_info = get_user_info(g.user_id)
+    if not user_info:
+        return jsonify({'error': 'User not found'}), 404
+
+    return jsonify(user_info)
+
+
+@auth_bp.route('/api/biosketches')
+@firebase_auth_required
+def get_my_biosketches():
+    """Get all biosketches for the authenticated user.
+
+    Requires valid Firebase ID token in Authorization header.
+    """
+    biosketches = get_user_biosketches(g.user_id)
+
+    # Convert timestamps to ISO format for JSON serialization
+    for bs in biosketches:
+        if bs.get('created_at'):
+            bs['created_at'] = bs['created_at'].isoformat() if hasattr(bs['created_at'], 'isoformat') else str(bs['created_at'])
+        if bs.get('updated_at'):
+            bs['updated_at'] = bs['updated_at'].isoformat() if hasattr(bs['updated_at'], 'isoformat') else str(bs['updated_at'])
+
+    return jsonify(biosketches)
+
+
+@auth_bp.route('/api/verify-token', methods=['POST'])
+@firebase_auth_required
+def verify_token():
+    """Verify a Firebase ID token.
+
+    Useful for checking if a token is still valid.
+    """
+    return jsonify({
+        'valid': True,
+        'uid': g.user_id,
+        'email': g.firebase_user.get('email')
+    })

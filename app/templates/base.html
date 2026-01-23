@@ -5,50 +5,202 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}SciENcv Biosketch Creator{% endblock %}</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        maroon: {
+                            50: '#fdf2f2',
+                            100: '#fce4e4',
+                            200: '#facece',
+                            300: '#f5abab',
+                            400: '#ed7a7a',
+                            500: '#e04f4f',
+                            600: '#cc3333',
+                            700: '#800000',
+                            800: '#6b0000',
+                            900: '#5c0000',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <style>
         [x-cloak] { display: none !important; }
+        .auth-loading { opacity: 0.5; }
     </style>
     {% block extra_head %}{% endblock %}
 </head>
-<body class="bg-gray-50 min-h-screen">
-    <nav class="bg-blue-800 text-white shadow-lg">
-        <div class="max-w-7xl mx-auto px-4 py-4">
+<body class="bg-gray-50 min-h-screen flex flex-col">
+    <nav class="bg-maroon-700 text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 py-3">
             <div class="flex items-center justify-between">
-                <a href="{{ url_for('main.index') }}" class="text-xl font-bold">
-                    SciENcv Biosketch Creator
+                <a href="{{ url_for('main.index') }}" class="flex items-center gap-3">
+                    <img src="{{ url_for('static', filename='images/hca_lab_logo.png') }}" alt="HCA Lab Logo" class="h-10 w-auto">
+                    <span class="text-xl font-bold">SciENcv Biosketch Creator</span>
                 </a>
                 <div class="flex items-center gap-4">
-                    <span class="text-sm text-blue-200 hidden sm:inline">NIH Biosketch Automation Tool</span>
-                    {% if current_user.is_authenticated %}
-                    <a href="{{ url_for('auth.profile') }}" class="text-sm text-blue-100 hover:text-white">
-                        {{ current_user.name or current_user.email }}
+                    <a href="https://clif-icu.com/" target="_blank" class="hidden sm:inline">
+                        <img src="{{ url_for('static', filename='images/CLIF_logo.png') }}" alt="CLIF Consortium" class="h-8 w-auto brightness-0 invert opacity-80 hover:opacity-100 transition-opacity">
                     </a>
-                    <a href="{{ url_for('auth.logout') }}" class="text-sm text-blue-200 hover:text-white">
-                        Logout
-                    </a>
-                    {% else %}
-                    <a href="{{ url_for('auth.login') }}" class="text-sm text-blue-100 hover:text-white">
-                        Login
-                    </a>
-                    <a href="{{ url_for('auth.register') }}" class="text-sm bg-blue-600 px-3 py-1 rounded hover:bg-blue-700">
-                        Register
-                    </a>
-                    {% endif %}
+                    <!-- Auth state managed by JavaScript -->
+                    <div id="auth-loading" class="text-sm text-maroon-200">Loading...</div>
+                    <div id="auth-logged-in" class="hidden flex items-center gap-4">
+                        <a href="{{ url_for('auth.profile') }}" class="text-sm text-maroon-100 hover:text-white">
+                            <span id="user-display-name">My Profile</span>
+                        </a>
+                        <button onclick="signOutUser()" class="text-sm text-maroon-200 hover:text-white">
+                            Logout
+                        </button>
+                    </div>
+                    <div id="auth-logged-out" class="hidden flex items-center gap-4">
+                        <a href="{{ url_for('auth.login') }}" class="text-sm text-maroon-100 hover:text-white">
+                            Login
+                        </a>
+                        <a href="{{ url_for('auth.register') }}" class="text-sm bg-maroon-600 px-3 py-1 rounded hover:bg-maroon-800">
+                            Register
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
     </nav>
 
-    <main class="max-w-7xl mx-auto px-4 py-8">
+    <main class="max-w-7xl mx-auto px-4 py-8 flex-grow">
         {% block content %}{% endblock %}
     </main>
 
     <footer class="bg-gray-100 border-t mt-auto">
-        <div class="max-w-7xl mx-auto px-4 py-4 text-center text-gray-600 text-sm">
-            SciENcv Biosketch Creator - Automate your NIH biosketch submissions
+        <div class="max-w-7xl mx-auto px-4 py-4">
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-2">
+                <div class="flex items-center gap-4">
+                    <a href="https://voices.uchicago.edu/healthallocate/" target="_blank" class="flex items-center gap-2 text-gray-600 hover:text-maroon-700 text-sm">
+                        <img src="{{ url_for('static', filename='images/hca_lab_logo.png') }}" alt="HCA Lab" class="h-6 w-auto">
+                        Health Care Allocations Lab
+                    </a>
+                    <span class="text-gray-300">|</span>
+                    <a href="https://clif-icu.com/" target="_blank" class="flex items-center gap-1">
+                        <img src="{{ url_for('static', filename='images/CLIF_logo.png') }}" alt="CLIF Consortium" class="h-5 w-auto">
+                    </a>
+                </div>
+                <div class="text-gray-500 text-sm">
+                    SciENcv Biosketch Creator - NIH Biosketch Automation Tool
+                </div>
+            </div>
         </div>
     </footer>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+
+    <script>
+        // Firebase configuration from server
+        const firebaseConfig = {
+            apiKey: "{{ firebase_config.apiKey }}",
+            authDomain: "{{ firebase_config.authDomain }}",
+            projectId: "{{ firebase_config.projectId }}",
+            storageBucket: "{{ firebase_config.storageBucket }}",
+            messagingSenderId: "{{ firebase_config.messagingSenderId }}",
+            appId: "{{ firebase_config.appId }}"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const googleProvider = new firebase.auth.GoogleAuthProvider();
+
+        // Current user state
+        let currentUser = null;
+        let idToken = null;
+
+        // Auth state observer
+        auth.onAuthStateChanged(async (user) => {
+            currentUser = user;
+            const loadingEl = document.getElementById('auth-loading');
+            const loggedInEl = document.getElementById('auth-logged-in');
+            const loggedOutEl = document.getElementById('auth-logged-out');
+
+            if (user) {
+                // User is signed in
+                idToken = await user.getIdToken();
+                const displayName = user.displayName || user.email;
+                document.getElementById('user-display-name').textContent = displayName;
+
+                loadingEl.classList.add('hidden');
+                loggedInEl.classList.remove('hidden');
+                loggedOutEl.classList.add('hidden');
+
+                // Trigger custom event for pages that need to know auth state changed
+                window.dispatchEvent(new CustomEvent('authStateChanged', { detail: { user, idToken } }));
+            } else {
+                // User is signed out
+                idToken = null;
+                loadingEl.classList.add('hidden');
+                loggedInEl.classList.add('hidden');
+                loggedOutEl.classList.remove('hidden');
+
+                window.dispatchEvent(new CustomEvent('authStateChanged', { detail: { user: null, idToken: null } }));
+            }
+        });
+
+        // Sign out function
+        async function signOutUser() {
+            try {
+                await auth.signOut();
+                window.location.href = "{{ url_for('main.index') }}";
+            } catch (error) {
+                console.error('Sign out error:', error);
+                alert('Failed to sign out: ' + error.message);
+            }
+        }
+
+        // Sign in with Google
+        async function signInWithGoogle() {
+            try {
+                await auth.signInWithPopup(googleProvider);
+                return true;
+            } catch (error) {
+                console.error('Google sign in error:', error);
+                throw error;
+            }
+        }
+
+        // Get current ID token (refreshes if needed)
+        async function getIdToken() {
+            if (currentUser) {
+                idToken = await currentUser.getIdToken();
+                return idToken;
+            }
+            return null;
+        }
+
+        // Helper for authenticated API calls
+        async function authenticatedFetch(url, options = {}) {
+            const token = await getIdToken();
+            const headers = options.headers || {};
+
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            return fetch(url, {
+                ...options,
+                headers
+            });
+        }
+
+        // Configure HTMX to include auth header
+        document.body.addEventListener('htmx:configRequest', async function(evt) {
+            const token = await getIdToken();
+            if (token) {
+                evt.detail.headers['Authorization'] = `Bearer ${token}`;
+            }
+        });
+    </script>
 
     {% block extra_scripts %}{% endblock %}
 </body>

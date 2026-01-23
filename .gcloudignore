@@ -1,0 +1,87 @@
+# Include .gitignore rules
+#!include:.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environment
+venv/
+ENV/
+env/
+.venv/
+
+# Environment variables
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Uploads
+uploads/*
+
+# Browser state (Playwright)
+browser_state/
+
+# macOS
+.DS_Store
+
+# Redis dump
+dump.rdb
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+test_uploads/
+tests/
+
+# Logs
+*.log
+
+# Personal biosketch files
+biosketch_example/
+screenshots/
+NIH_instructions/
+
+# Word temp files
+~$*
+
+# Flask instance folder
+instance/
+
+# Git
+.git/
+.gitignore
+
+# Firebase service account (should use Secret Manager in production)
+firebase-service-account.json
+
+# Documentation
+*.md
+!README.md
+
+# Claude
+.claude/
+claude.md

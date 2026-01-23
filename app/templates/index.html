@@ -7,9 +7,9 @@
     <div class="bg-white rounded-lg shadow-md p-8">
         <h1 class="text-2xl font-bold text-gray-800 mb-6">Upload Your NIH Biosketch</h1>
 
-        <div class="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-            <h2 class="font-semibold text-blue-800 mb-2">How it works</h2>
-            <ol class="list-decimal list-inside text-blue-700 space-y-1 text-sm">
+        <div class="mb-6 p-4 bg-maroon-50 rounded-lg border border-maroon-200">
+            <h2 class="font-semibold text-maroon-800 mb-2">How it works</h2>
+            <ol class="list-decimal list-inside text-maroon-700 space-y-1 text-sm">
                 <li>Upload your NIH biosketch Word document (.docx)</li>
                 <li>Review and edit the parsed data</li>
                 <li>Connect to SciENcv (you'll log in manually for security)</li>
@@ -24,7 +24,7 @@
               hx-indicator="#loading"
               class="space-y-6">
 
-            <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-500 transition-colors"
+            <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-maroon-500 transition-colors"
                  id="drop-zone">
                 <input type="file"
                        name="file"
@@ -39,7 +39,7 @@
                                   d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
                         </svg>
                         <div class="text-gray-600">
-                            <span class="text-blue-600 font-medium">Click to upload</span>
+                            <span class="text-maroon-700 font-medium">Click to upload</span>
                             or drag and drop
                         </div>
                         <p class="text-sm text-gray-500" id="file-name">
@@ -50,7 +50,7 @@
             </div>
 
             <button type="submit"
-                    class="w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    class="w-full bg-maroon-700 text-white py-3 px-6 rounded-lg font-medium hover:bg-maroon-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     id="submit-btn"
                     disabled>
                 <span id="btn-text">Upload and Parse</span>
@@ -80,19 +80,19 @@
         if (this.files.length > 0) {
             fileName.textContent = this.files[0].name;
             submitBtn.disabled = false;
-            dropZone.classList.add('border-blue-500', 'bg-blue-50');
+            dropZone.classList.add('border-maroon-500', 'bg-maroon-50');
         }
     });
 
     // Drag and drop
     dropZone.addEventListener('dragover', function(e) {
         e.preventDefault();
-        this.classList.add('border-blue-500', 'bg-blue-50');
+        this.classList.add('border-maroon-500', 'bg-maroon-50');
     });
 
     dropZone.addEventListener('dragleave', function(e) {
         if (!fileInput.files.length) {
-            this.classList.remove('border-blue-500', 'bg-blue-50');
+            this.classList.remove('border-maroon-500', 'bg-maroon-50');
         }
     });
 

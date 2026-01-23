@@ -5,10 +5,8 @@ import os
 
 def create_app(config_name=None):
     """Create and configure the Flask application."""
-    # Import Flask only when creating the app
     from flask import Flask
     from flask_cors import CORS
-    from flask_login import LoginManager
 
     app = Flask(__name__)
 
@@ -20,39 +18,38 @@ def create_app(config_name=None):
     # Initialize extensions
     CORS(app)
 
-    # Initialize database
-    from .models import db
-    db.init_app(app)
-
-    # Initialize login manager
-    login_manager = LoginManager()
-    login_manager.init_app(app)
-    login_manager.login_view = 'auth.login'
-    login_manager.login_message = 'Please log in to access this page.'
-    login_manager.login_message_category = 'info'
-
-    @login_manager.user_loader
-    def load_user(user_id):
-        from .models import User
-        return User.query.get(int(user_id))
-
-    # Create database tables
-    with app.app_context():
-        db.create_all()
+    # Initialize Firebase
+    from .firebase_config import init_firebase
+    try:
+        init_firebase(app)
+    except Exception as e:
+        app.logger.warning(f"Firebase initialization failed: {e}")
+        app.logger.warning("App will run without Firebase - some features may be unavailable")
 
     # Ensure upload folder exists
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
     # Register blueprints
-    from .api.routes import api_bp
+    from .api.routes import api_bp, main_bp
     app.register_blueprint(api_bp, url_prefix='/api')
-
-    # Register main routes
-    from .api.routes import main_bp
     app.register_blueprint(main_bp)
 
     # Register auth routes
     from .api.auth import auth_bp
     app.register_blueprint(auth_bp, url_prefix='/auth')
+
+    # Make Firebase config available to templates
+    @app.context_processor
+    def inject_firebase_config():
+        return {
+            'firebase_config': {
+                'apiKey': app.config.get('FIREBASE_API_KEY', ''),
+                'authDomain': app.config.get('FIREBASE_AUTH_DOMAIN', ''),
+                'projectId': app.config.get('FIREBASE_PROJECT_ID', ''),
+                'storageBucket': app.config.get('FIREBASE_STORAGE_BUCKET', ''),
+                'messagingSenderId': app.config.get('FIREBASE_MESSAGING_SENDER_ID', ''),
+                'appId': app.config.get('FIREBASE_APP_ID', '')
+            }
+        }
 
     return app

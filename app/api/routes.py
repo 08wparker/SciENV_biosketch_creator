@@ -3,13 +3,19 @@
 from __future__ import annotations
 import os
 import uuid
-import json
 from pathlib import Path
-from flask import Blueprint, request, jsonify, render_template, current_app, redirect, url_for
-from flask_login import current_user, login_required
+from flask import Blueprint, request, jsonify, render_template, current_app, redirect, url_for, g
 from werkzeug.utils import secure_filename
 
 from ..parser import BiosketchParser, BiosketchData
+from ..firebase_config import firebase_auth_required, firebase_auth_optional
+from ..firestore_models import (
+    get_biosketch,
+    get_biosketch_data as firestore_get_biosketch_data,
+    save_biosketch,
+    delete_biosketch as firestore_delete_biosketch,
+    update_biosketch_data
+)
 
 
 # Create blueprints
@@ -31,39 +37,23 @@ def get_upload_path(filename: str) -> Path:
     return Path(current_app.config['UPLOAD_FOLDER']) / filename
 
 
-def get_biosketch_data(job_id: str):
-    """Get biosketch data from database or memory."""
-    if current_user.is_authenticated:
-        from ..models import SavedBiosketch
-        biosketch = SavedBiosketch.query.filter_by(job_id=job_id, user_id=current_user.id).first()
-        if biosketch:
-            return biosketch.data
+def get_biosketch_data_helper(job_id: str, user_id: str = None):
+    """Get biosketch data from Firestore or memory.
+
+    Tries Firestore first if user_id provided, falls back to memory.
+    """
+    if user_id:
+        data = firestore_get_biosketch_data(job_id, user_id)
+        if data:
+            return data
     return parsed_data_store.get(job_id)
 
 
-def save_biosketch_data(job_id: str, data: dict, selected_contributions=None, selected_products=None):
-    """Save biosketch data to database or memory."""
-    if current_user.is_authenticated:
-        from ..models import db, SavedBiosketch
-        biosketch = SavedBiosketch.query.filter_by(job_id=job_id, user_id=current_user.id).first()
-        if biosketch:
-            biosketch.data = data
-            if selected_contributions is not None:
-                biosketch.selected_contributions = selected_contributions
-            if selected_products is not None:
-                biosketch.selected_products = selected_products
-            biosketch.name = data.get('name', 'Unnamed Biosketch')
-        else:
-            biosketch = SavedBiosketch(
-                job_id=job_id,
-                user_id=current_user.id,
-                data=data,
-                name=data.get('name', 'Unnamed Biosketch'),
-                selected_contributions=selected_contributions,
-                selected_products=selected_products
-            )
-            db.session.add(biosketch)
-        db.session.commit()
+def save_biosketch_data_helper(job_id: str, data: dict, user_id: str = None,
+                               selected_contributions=None, selected_products=None):
+    """Save biosketch data to Firestore or memory."""
+    if user_id:
+        save_biosketch(job_id, data, user_id, selected_contributions, selected_products)
     else:
         parsed_data_store[job_id] = data
 
@@ -77,21 +67,29 @@ def index():
 
 
 @main_bp.route('/review/<job_id>')
+@firebase_auth_optional
 def review(job_id: str):
     """Render the review page for parsed biosketch data."""
-    data = get_biosketch_data(job_id)
+    user_id = getattr(g, 'user_id', None)
+
+    # Try to get data from Firestore or memory
+    data = get_biosketch_data_helper(job_id, user_id)
+    if not data:
+        # Also try without user_id (for anonymous uploads)
+        data = parsed_data_store.get(job_id)
+
     if not data:
         return render_template('error.html', message='Job not found'), 404
 
-    # Get selected items if user is logged in
+    # Get selected items from Firestore if user is logged in
     selected_contributions = []
-    selected_products = []
-    if current_user.is_authenticated:
-        from ..models import SavedBiosketch
-        biosketch = SavedBiosketch.query.filter_by(job_id=job_id, user_id=current_user.id).first()
+    selected_products = {}
+
+    if user_id:
+        biosketch = get_biosketch(job_id, user_id)
         if biosketch:
-            selected_contributions = biosketch.selected_contributions or []
-            selected_products = biosketch.selected_products or []
+            selected_contributions = biosketch.get('selected_contributions') or []
+            selected_products = biosketch.get('selected_products') or {}
 
     return render_template('review.html',
                            job_id=job_id,
@@ -103,6 +101,7 @@ def review(job_id: str):
 # ============ API Routes ============
 
 @api_bp.route('/upload', methods=['POST'])
+@firebase_auth_optional
 def upload_file():
     """Handle file upload and initiate parsing."""
     if 'file' not in request.files:
@@ -130,8 +129,9 @@ def upload_file():
         data = parser.parse()
         data_dict = data.to_dict()
 
-        # Save to database or memory
-        save_biosketch_data(job_id, data_dict)
+        # Save to Firestore or memory
+        user_id = getattr(g, 'user_id', None)
+        save_biosketch_data_helper(job_id, data_dict, user_id)
 
         return jsonify({
             'job_id': job_id,
@@ -143,9 +143,16 @@ def upload_file():
 
 
 @api_bp.route('/parse/<job_id>', methods=['GET'])
+@firebase_auth_optional
 def get_parsed_data(job_id: str):
     """Get the parsed biosketch data for a job."""
-    data = get_biosketch_data(job_id)
+    user_id = getattr(g, 'user_id', None)
+    data = get_biosketch_data_helper(job_id, user_id)
+
+    if not data:
+        # Try without user_id
+        data = parsed_data_store.get(job_id)
+
     if not data:
         return jsonify({'error': 'Job not found'}), 404
 
@@ -153,9 +160,16 @@ def get_parsed_data(job_id: str):
 
 
 @api_bp.route('/parse/<job_id>', methods=['PUT'])
+@firebase_auth_optional
 def update_parsed_data(job_id: str):
     """Update the parsed biosketch data (for manual edits)."""
-    current_data = get_biosketch_data(job_id)
+    user_id = getattr(g, 'user_id', None)
+
+    # Get current data
+    current_data = get_biosketch_data_helper(job_id, user_id)
+    if not current_data:
+        current_data = parsed_data_store.get(job_id)
+
     if not current_data:
         return jsonify({'error': 'Job not found'}), 404
 
@@ -163,7 +177,6 @@ def update_parsed_data(job_id: str):
     if not data:
         return jsonify({'error': 'No data provided'}), 400
 
-    # Validate and update
     try:
         # Merge updated fields
         current_data.update(data)
@@ -173,7 +186,8 @@ def update_parsed_data(job_id: str):
         selected_products = data.get('selected_products')
 
         # Save updated data
-        save_biosketch_data(job_id, current_data, selected_contributions, selected_products)
+        save_biosketch_data_helper(job_id, current_data, user_id,
+                                   selected_contributions, selected_products)
 
         return jsonify({'status': 'success', 'data': current_data})
     except Exception as e:
@@ -181,25 +195,27 @@ def update_parsed_data(job_id: str):
 
 
 @api_bp.route('/biosketch/<job_id>', methods=['DELETE'])
-@login_required
+@firebase_auth_required
 def delete_biosketch(job_id: str):
     """Delete a saved biosketch."""
-    from ..models import db, SavedBiosketch
-    biosketch = SavedBiosketch.query.filter_by(job_id=job_id, user_id=current_user.id).first()
+    success = firestore_delete_biosketch(job_id, g.user_id)
 
-    if not biosketch:
+    if not success:
         return jsonify({'error': 'Biosketch not found'}), 404
-
-    db.session.delete(biosketch)
-    db.session.commit()
 
     return jsonify({'status': 'success'})
 
 
 @api_bp.route('/automate/<job_id>', methods=['POST'])
+@firebase_auth_optional
 def start_automation(job_id: str):
     """Start the SciENcv automation process."""
-    data = get_biosketch_data(job_id)
+    user_id = getattr(g, 'user_id', None)
+    data = get_biosketch_data_helper(job_id, user_id)
+
+    if not data:
+        data = parsed_data_store.get(job_id)
+
     if not data:
         return jsonify({'error': 'Job not found'}), 404
 

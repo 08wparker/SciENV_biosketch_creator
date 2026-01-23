@@ -4,98 +4,223 @@
 
 {% block content %}
 <div class="space-y-6">
-    <!-- Profile Header -->
-    <div class="bg-white rounded-lg shadow-md p-6">
-        <div class="flex items-center justify-between">
-            <div>
-                <h1 class="text-2xl font-bold text-gray-800">
-                    {{ current_user.name or 'My Profile' }}
-                </h1>
-                <p class="text-gray-600">{{ current_user.email }}</p>
-            </div>
-            <a href="{{ url_for('auth.logout') }}"
-               class="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
-                Logout
-            </a>
-        </div>
+    <!-- Loading State -->
+    <div id="profile-loading" class="bg-white rounded-lg shadow-md p-6 text-center">
+        <svg class="inline animate-spin h-8 w-8 text-maroon-700" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+        </svg>
+        <p class="mt-2 text-gray-600">Loading profile...</p>
     </div>
 
-    <!-- Saved Biosketches -->
-    <div class="bg-white rounded-lg shadow-md p-6">
-        <div class="flex items-center justify-between mb-4">
-            <h2 class="text-lg font-semibold text-gray-800">Saved Biosketches</h2>
-            <a href="{{ url_for('main.index') }}"
-               class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
-                Upload New
-            </a>
+    <!-- Not Logged In State -->
+    <div id="profile-not-logged-in" class="hidden bg-white rounded-lg shadow-md p-6 text-center">
+        <h1 class="text-xl font-bold text-gray-800 mb-4">Please Log In</h1>
+        <p class="text-gray-600 mb-4">You need to be logged in to view your profile.</p>
+        <a href="{{ url_for('auth.login') }}"
+           class="inline-block px-4 py-2 bg-maroon-700 text-white rounded-lg hover:bg-maroon-800">
+            Login
+        </a>
+    </div>
+
+    <!-- Profile Content -->
+    <div id="profile-content" class="hidden space-y-6">
+        <!-- Profile Header -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-800" id="profile-name">My Profile</h1>
+                    <p class="text-gray-600" id="profile-email"></p>
+                </div>
+                <button onclick="signOutUser()"
+                        class="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+                    Logout
+                </button>
+            </div>
         </div>
 
-        {% if biosketches %}
-        <div class="space-y-3">
-            {% for biosketch in biosketches %}
-            <div class="border rounded-lg p-4 hover:border-blue-300 transition-colors">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <h3 class="font-medium text-gray-800">
-                            {{ biosketch.name or biosketch.data.get('name', 'Unnamed Biosketch') }}
-                        </h3>
-                        <p class="text-sm text-gray-500">
-                            Last updated: {{ biosketch.updated_at.strftime('%B %d, %Y at %I:%M %p') }}
-                        </p>
-                    </div>
-                    <div class="flex gap-2">
-                        <a href="{{ url_for('main.review', job_id=biosketch.job_id) }}"
-                           class="px-3 py-1 text-sm bg-green-100 text-green-700 rounded hover:bg-green-200">
-                            Continue Editing
-                        </a>
-                        <button onclick="deleteBiosketch('{{ biosketch.job_id }}')"
-                                class="px-3 py-1 text-sm text-red-600 hover:text-red-800">
-                            Delete
-                        </button>
-                    </div>
-                </div>
-                <div class="mt-2 text-xs text-gray-400">
-                    {% if biosketch.data.get('contributions') %}
-                        {{ biosketch.data.get('contributions', [])|length }} contributions
-                    {% endif %}
-                    {% if biosketch.selected_contributions %}
-                        ({{ biosketch.selected_contributions|length }} selected)
-                    {% endif %}
-                </div>
+        <!-- Saved Biosketches -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold text-gray-800">Saved Biosketches</h2>
+                <a href="{{ url_for('main.index') }}"
+                   class="px-4 py-2 bg-maroon-700 text-white rounded-lg text-sm hover:bg-maroon-800">
+                    Upload New
+                </a>
             </div>
-            {% endfor %}
+
+            <!-- Loading biosketches -->
+            <div id="biosketches-loading" class="text-center py-8">
+                <svg class="inline animate-spin h-6 w-6 text-maroon-700" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                </svg>
+                <p class="mt-2 text-gray-500">Loading biosketches...</p>
+            </div>
+
+            <!-- Biosketches list -->
+            <div id="biosketches-list" class="hidden space-y-3"></div>
+
+            <!-- Empty state -->
+            <div id="biosketches-empty" class="hidden text-center py-8 text-gray-500">
+                <p>No saved biosketches yet.</p>
+                <p class="text-sm mt-2">
+                    <a href="{{ url_for('main.index') }}" class="text-maroon-700 hover:text-maroon-800">Upload a biosketch</a>
+                    to get started.
+                </p>
+            </div>
+
+            <!-- Error state -->
+            <div id="biosketches-error" class="hidden text-center py-8 text-red-500">
+                <p>Failed to load biosketches.</p>
+                <button onclick="loadBiosketches()" class="text-sm mt-2 text-maroon-700 hover:text-maroon-800">
+                    Try again
+                </button>
+            </div>
         </div>
-        {% else %}
-        <div class="text-center py-8 text-gray-500">
-            <p>No saved biosketches yet.</p>
-            <p class="text-sm mt-2">
-                <a href="{{ url_for('main.index') }}" class="text-blue-600 hover:text-blue-800">Upload a biosketch</a>
-                to get started.
-            </p>
-        </div>
-        {% endif %}
     </div>
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
-async function deleteBiosketch(jobId) {
-    if (!confirm('Are you sure you want to delete this biosketch?')) return;
+    let biosketches = [];
 
-    try {
-        const response = await fetch(`/api/biosketch/${jobId}`, {
-            method: 'DELETE'
+    function formatDate(dateString) {
+        if (!dateString) return 'Unknown date';
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit'
         });
-
-        if (response.ok) {
-            window.location.reload();
-        } else {
-            alert('Failed to delete biosketch');
-        }
-    } catch (error) {
-        alert('Error: ' + error.message);
     }
-}
+
+    function renderBiosketches() {
+        const listEl = document.getElementById('biosketches-list');
+        const emptyEl = document.getElementById('biosketches-empty');
+        const loadingEl = document.getElementById('biosketches-loading');
+        const errorEl = document.getElementById('biosketches-error');
+
+        loadingEl.classList.add('hidden');
+        errorEl.classList.add('hidden');
+
+        if (biosketches.length === 0) {
+            listEl.classList.add('hidden');
+            emptyEl.classList.remove('hidden');
+            return;
+        }
+
+        emptyEl.classList.add('hidden');
+        listEl.classList.remove('hidden');
+
+        listEl.innerHTML = biosketches.map(biosketch => {
+            const name = biosketch.name || (biosketch.data && biosketch.data.name) || 'Unnamed Biosketch';
+            const updatedAt = formatDate(biosketch.updated_at);
+            const contributionsCount = biosketch.data && biosketch.data.contributions ? biosketch.data.contributions.length : 0;
+            const selectedCount = biosketch.selected_contributions ? biosketch.selected_contributions.length : 0;
+
+            return `
+            <div class="border rounded-lg p-4 hover:border-maroon-300 transition-colors">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="font-medium text-gray-800">${escapeHtml(name)}</h3>
+                        <p class="text-sm text-gray-500">Last updated: ${updatedAt}</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <a href="/review/${biosketch.job_id}"
+                           class="px-3 py-1 text-sm bg-green-100 text-green-700 rounded hover:bg-green-200">
+                            Continue Editing
+                        </a>
+                        <button onclick="deleteBiosketch('${biosketch.job_id}')"
+                                class="px-3 py-1 text-sm text-red-600 hover:text-red-800">
+                            Delete
+                        </button>
+                    </div>
+                </div>
+                <div class="mt-2 text-xs text-gray-400">
+                    ${contributionsCount > 0 ? `${contributionsCount} contributions` : ''}
+                    ${selectedCount > 0 ? `(${selectedCount} selected)` : ''}
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    async function loadBiosketches() {
+        const loadingEl = document.getElementById('biosketches-loading');
+        const errorEl = document.getElementById('biosketches-error');
+
+        loadingEl.classList.remove('hidden');
+        errorEl.classList.add('hidden');
+
+        try {
+            const response = await authenticatedFetch('/auth/api/biosketches');
+            if (!response.ok) {
+                throw new Error('Failed to fetch biosketches');
+            }
+            biosketches = await response.json();
+            renderBiosketches();
+        } catch (error) {
+            console.error('Error loading biosketches:', error);
+            loadingEl.classList.add('hidden');
+            errorEl.classList.remove('hidden');
+        }
+    }
+
+    async function deleteBiosketch(jobId) {
+        if (!confirm('Are you sure you want to delete this biosketch?')) return;
+
+        try {
+            const response = await authenticatedFetch(`/api/biosketch/${jobId}`, {
+                method: 'DELETE'
+            });
+
+            if (response.ok) {
+                // Remove from local array and re-render
+                biosketches = biosketches.filter(b => b.job_id !== jobId);
+                renderBiosketches();
+            } else {
+                alert('Failed to delete biosketch');
+            }
+        } catch (error) {
+            alert('Error: ' + error.message);
+        }
+    }
+
+    // Listen for auth state changes
+    window.addEventListener('authStateChanged', async (e) => {
+        const loadingEl = document.getElementById('profile-loading');
+        const notLoggedInEl = document.getElementById('profile-not-logged-in');
+        const contentEl = document.getElementById('profile-content');
+
+        loadingEl.classList.add('hidden');
+
+        if (e.detail.user) {
+            // User is logged in
+            notLoggedInEl.classList.add('hidden');
+            contentEl.classList.remove('hidden');
+
+            // Update profile info
+            document.getElementById('profile-name').textContent =
+                e.detail.user.displayName || 'My Profile';
+            document.getElementById('profile-email').textContent =
+                e.detail.user.email;
+
+            // Load biosketches
+            await loadBiosketches();
+        } else {
+            // User is not logged in
+            notLoggedInEl.classList.remove('hidden');
+            contentEl.classList.add('hidden');
+        }
+    });
 </script>
 {% endblock %}

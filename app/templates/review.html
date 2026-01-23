@@ -9,7 +9,7 @@
         <div class="flex items-center justify-between mb-4">
             <h1 class="text-2xl font-bold text-gray-800">Review Parsed Biosketch</h1>
             <a href="{{ url_for('main.index') }}"
-               class="text-blue-600 hover:text-blue-800 text-sm">
+               class="text-maroon-700 hover:text-maroon-800 text-sm">
                 &larr; Upload Another
             </a>
         </div>
@@ -33,7 +33,7 @@
     <!-- Education Section -->
     <div class="bg-white rounded-lg shadow-md p-6">
         <h2 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-            <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm mr-2">A</span>
+            <span class="bg-blue-100 text-maroon-800 px-2 py-1 rounded text-sm mr-2">A</span>
             Professional Preparation ({{ data.education|length }} entries)
         </h2>
         <div class="overflow-x-auto">
@@ -149,7 +149,7 @@
                 <span class="bg-green-100 text-green-800 px-2 py-1 rounded text-sm mr-2">Supplement A</span>
                 Personal Statement
             </h2>
-            <button onclick="editPersonalStatement()" id="edit-ps-btn" class="text-blue-500 hover:text-blue-700 text-sm">Edit</button>
+            <button onclick="editPersonalStatement()" id="edit-ps-btn" class="text-maroon-600 hover:text-maroon-700 text-sm">Edit</button>
         </div>
 
         <!-- Display Mode -->
@@ -288,7 +288,7 @@
                                 {% for citation in contrib.citations %}
                                 <li class="truncate" title="{{ citation.text }}">
                                     {{ citation.text[:80] }}...
-                                    {% if citation.pmid %}<span class="text-blue-500">[PMID: {{ citation.pmid }}]</span>{% endif %}
+                                    {% if citation.pmid %}<span class="text-maroon-600">[PMID: {{ citation.pmid }}]</span>{% endif %}
                                 </li>
                                 {% endfor %}
                             </ul>
@@ -331,14 +331,14 @@
                 </a>
                 <button onclick="saveAndContinue()"
                         id="continue-btn"
-                        class="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        class="px-6 py-2 bg-maroon-700 text-white rounded-lg font-medium hover:bg-maroon-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                     Save & Start Automation
                 </button>
             </div>
         </div>
         <div id="automation-status" class="mt-4 hidden">
-            <div class="p-4 bg-blue-50 rounded-lg">
-                <p class="text-blue-800" id="status-message">Starting automation...</p>
+            <div class="p-4 bg-maroon-50 rounded-lg">
+                <p class="text-maroon-800" id="status-message">Starting automation...</p>
             </div>
         </div>
     </div>
@@ -401,7 +401,7 @@
         container.innerHTML = allCitations.map((citation, idx) => {
             const isSelected = selectedSet.has(idx);
             const isInOther = otherSet.has(idx);
-            const pmidBadge = citation.pmid ? `<span class="text-blue-600 text-xs">[PMID: ${citation.pmid}]</span>` : '';
+            const pmidBadge = citation.pmid ? `<span class="text-maroon-700 text-xs">[PMID: ${citation.pmid}]</span>` : '';
             const sourceLabel = citation.source === 'personal_statement'
                 ? '<span class="text-green-600 text-xs">[Personal Statement]</span>'
                 : `<span class="text-orange-600 text-xs">[Contribution ${parseInt(citation.source.split('_')[1]) + 1}]</span>`;
@@ -681,7 +681,7 @@
         container.innerHTML = contributions.map((contrib, idx) => {
             const isChecked = selectedIndices.has(idx) ? 'checked' : '';
             const citationsHtml = (contrib.citations || []).map(c => {
-                const pmidBadge = c.pmid ? `<span class="text-blue-500">[PMID: ${c.pmid}]</span>` : '';
+                const pmidBadge = c.pmid ? `<span class="text-maroon-600">[PMID: ${c.pmid}]</span>` : '';
                 return `<li class="truncate" title="${escapeHtml(c.text)}">${escapeHtml(c.text.substring(0, 80))}... ${pmidBadge}</li>`;
             }).join('');
 
@@ -709,7 +709,7 @@
                         <div class="flex items-center gap-2 mb-2">
                             <span class="inline-flex items-center justify-center w-6 h-6 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">${idx + 1}</span>
                             <span class="text-xs text-gray-400">${(contrib.citations || []).length} citation(s)</span>
-                            <button onclick="editContribution(${idx})" class="ml-auto text-blue-400 hover:text-blue-600 text-xs">Edit</button>
+                            <button onclick="editContribution(${idx})" class="ml-auto text-blue-400 hover:text-maroon-700 text-xs">Edit</button>
                             <button onclick="deleteContribution(${idx})" class="text-red-400 hover:text-red-600 text-xs">Delete</button>
                         </div>
                         <div id="narrative-display-${idx}">
@@ -800,9 +800,9 @@
         const relatedProducts = [...selectedRelatedProducts].map(idx => allCitations[idx]);
         const otherProducts = [...selectedOtherProducts].map(idx => allCitations[idx]);
 
-        // Update the data on server
+        // Update the data on server (using authenticatedFetch from base.html)
         try {
-            const response = await fetch(`/api/parse/${jobId}`, {
+            const response = await authenticatedFetch(`/api/parse/${jobId}`, {
                 method: 'PUT',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
@@ -836,7 +836,7 @@
         statusMsg.textContent = 'Starting automation...';
 
         try {
-            const response = await fetch(`/api/automate/${jobId}`, {
+            const response = await authenticatedFetch(`/api/automate/${jobId}`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'}
             });

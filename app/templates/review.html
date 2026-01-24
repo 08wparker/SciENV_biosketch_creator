@@ -592,17 +592,13 @@
 
         // Update status
         const status = document.getElementById('selection-status');
-        const continueBtn = document.getElementById('continue-btn');
 
         if (selectedIndices.size === 5) {
             status.innerHTML = '<span class="text-green-600">5 contributions selected - ready!</span>';
-            continueBtn.disabled = false;
         } else if (selectedIndices.size > 5) {
             status.innerHTML = '<span class="text-red-600">Too many selected (max 5)</span>';
-            continueBtn.disabled = true;
         } else {
             status.innerHTML = `<span class="text-amber-600">Select ${5 - selectedIndices.size} more contribution(s)</span>`;
-            continueBtn.disabled = true;
         }
 
         // Update preview

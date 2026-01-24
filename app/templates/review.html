@@ -7,12 +7,21 @@
     <!-- Header Section -->
     <div class="bg-white rounded-lg shadow-md p-6">
         <div class="flex items-center justify-between mb-4">
-            <h1 class="text-2xl font-bold text-gray-800">Review Parsed Biosketch</h1>
+            <h1 class="text-2xl font-bold text-gray-800">NIH Biographical Sketch Common Form</h1>
             <a href="{{ url_for('main.index') }}"
                class="text-maroon-700 hover:text-maroon-800 text-sm">
                 &larr; Upload Another
             </a>
         </div>
+        <p class="text-sm text-gray-600 mb-4">
+            This Biographical Sketch Common Form provides instructions for submission of a biographical sketch by each individual identified as a senior/key person on a Federally funded research project.
+        </p>
+    </div>
+
+    <!-- Identifying Information Section -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <h2 class="text-lg font-semibold text-gray-800 mb-2">Identifying Information, Organization and Location</h2>
+        <p class="text-sm text-gray-600 mb-4">In this section, disclose the information requested regarding the individual and their associated organization and location.</p>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
             <div>
@@ -20,7 +29,7 @@
                 <p class="font-medium text-gray-800">{{ data.name }}</p>
             </div>
             <div>
-                <label class="text-sm text-gray-500">eRA Commons Username</label>
+                <label class="text-sm text-gray-500">eRA Commons ID</label>
                 <p class="font-medium text-gray-800">{{ data.era_commons_username }}</p>
             </div>
             <div>
@@ -30,19 +39,29 @@
         </div>
     </div>
 
-    <!-- Education Section -->
+    <!-- ======================= -->
+    <!-- MAIN BIOSKETCH SECTIONS -->
+    <!-- ======================= -->
+
+    <!-- A. Professional Preparation Section -->
     <div class="bg-white rounded-lg shadow-md p-6">
-        <h2 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-            <span class="bg-blue-100 text-maroon-800 px-2 py-1 rounded text-sm mr-2">A</span>
-            Professional Preparation ({{ data.education|length }} entries)
+        <h2 class="text-lg font-semibold text-gray-800 mb-2 flex items-center">
+            <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm mr-2">A</span>
+            Professional Preparation
         </h2>
+
+        <!-- Instructions -->
+        <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+            A list of the senior/key person's professional preparation (e.g., education and training), listed in reverse chronological order by start date. Include all postdoctoral and fellowship training, as applicable, listing each separately. Also include the baccalaureate degree or other initial professional education.
+        </div>
+
         <div class="overflow-x-auto">
             <table class="w-full text-sm">
                 <thead class="bg-gray-50">
                     <tr>
-                        <th class="px-4 py-2 text-left text-gray-600">Institution</th>
-                        <th class="px-4 py-2 text-left text-gray-600">Degree</th>
-                        <th class="px-4 py-2 text-left text-gray-600">Date</th>
+                        <th class="px-4 py-2 text-left text-gray-600">Organization</th>
+                        <th class="px-4 py-2 text-left text-gray-600">Degree (if applicable)</th>
+                        <th class="px-4 py-2 text-left text-gray-600">Receipt Date</th>
                         <th class="px-4 py-2 text-left text-gray-600">Field of Study</th>
                     </tr>
                 </thead>
@@ -58,60 +77,65 @@
                 </tbody>
             </table>
         </div>
+        <p class="text-xs text-gray-500 mt-2">{{ data.education|length }} entries</p>
     </div>
 
-    <!-- Positions and Honors Section -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- Positions -->
-        <div class="bg-white rounded-lg shadow-md p-6">
-            <h2 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                <span class="bg-purple-100 text-purple-800 px-2 py-1 rounded text-sm mr-2">B</span>
-                Appointments & Positions ({{ data.positions|length }})
-            </h2>
-            <ul class="space-y-2 text-sm">
-                {% for pos in data.positions %}
-                <li class="border-l-2 border-purple-200 pl-3">
-                    <span class="text-gray-500">{{ pos.dates }}</span>
-                    <p class="text-gray-800">{{ pos.title }}</p>
-                    {% if pos.institution %}
-                    <p class="text-gray-600 text-xs">{{ pos.institution }}</p>
-                    {% endif %}
-                </li>
-                {% endfor %}
-            </ul>
-        </div>
-
-        <!-- Honors -->
-        <div class="bg-white rounded-lg shadow-md p-6">
-            <h2 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-sm mr-2">B</span>
-                Honors ({{ data.honors|length }})
-            </h2>
-            <ul class="space-y-2 text-sm">
-                {% for honor in data.honors %}
-                <li class="border-l-2 border-yellow-200 pl-3">
-                    <span class="text-gray-500">{{ honor.year }}</span>
-                    <p class="text-gray-800">{{ honor.description[:100] }}{% if honor.description|length > 100 %}...{% endif %}</p>
-                </li>
-                {% endfor %}
-            </ul>
-        </div>
-    </div>
-
-    <!-- Products Section - Two Categories -->
+    <!-- B. Appointments and Positions Section -->
     <div class="bg-white rounded-lg shadow-md p-6">
-        <h2 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+        <h2 class="text-lg font-semibold text-gray-800 mb-2 flex items-center">
+            <span class="bg-purple-100 text-purple-800 px-2 py-1 rounded text-sm mr-2">B</span>
+            Appointments and Positions
+        </h2>
+
+        <!-- Instructions -->
+        <div class="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg text-sm text-purple-800">
+            <p class="mb-2">A list, in reverse chronological order by start date, of all the senior/key person's academic, professional, or institutional appointments and positions, beginning with the current appointment (including the associated organization and location). Appointments and positions include any titled academic, professional, or institutional position whether or not remuneration is received, and whether full-time, part-time, or voluntary (including adjunct, visiting, or honorary).</p>
+            <p>Senior/key personnel must only identify all domestic and foreign professional appointments and positions outside of the primary organization for a period up to three years from the date the applicant submits the proposal to the agency for funding consideration.</p>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-2 text-left text-gray-600">Date</th>
+                        <th class="px-4 py-2 text-left text-gray-600">Title</th>
+                        <th class="px-4 py-2 text-left text-gray-600">Organization/Department</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y">
+                    {% for pos in data.positions %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-2 whitespace-nowrap">{{ pos.dates }}</td>
+                        <td class="px-4 py-2">{{ pos.title }}</td>
+                        <td class="px-4 py-2">{{ pos.institution }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p class="text-xs text-gray-500 mt-2">{{ data.positions|length }} entries</p>
+    </div>
+
+    <!-- C. Products Section -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <h2 class="text-lg font-semibold text-gray-800 mb-2 flex items-center">
             <span class="bg-teal-100 text-teal-800 px-2 py-1 rounded text-sm mr-2">C</span>
             Products
         </h2>
 
+        <!-- Instructions -->
         <div class="mb-4 p-3 bg-teal-50 border border-teal-200 rounded-lg text-sm text-teal-800">
-            <strong>Instructions:</strong> Select products from your publications below. You need two sets:
-            <ul class="list-disc list-inside mt-1 ml-2">
-                <li><strong>Products closely related to the proposed project</strong> (up to 5)</li>
-                <li><strong>Other significant products</strong> highlighting your contributions to science (up to 5)</li>
+            <p class="mb-2">Provide a list of: (i) up to five products closely related to the proposed project; and (ii) up to five other significant products that highlight the senior/key person's Contributions to Science. The NIH Biographical Sketch Supplement will provide the opportunity to describe these contributions in more depth while referencing the other significant products cited in this section.</p>
+            <p class="mb-2">Acceptable products must be citable and accessible including by Persistent Identifier (PID), and may include:</p>
+            <ul class="list-disc list-inside ml-2 mb-2">
+                <li>publications, conference papers, and presentations;</li>
+                <li>technologies or techniques;</li>
+                <li>patents, copyrights, and licenses;</li>
+                <li>inventions, germplasm, and other collections;</li>
+                <li>data, databases, and other materials; and</li>
+                <li>other products such as data, databases, or datasets, physical collections, audio or video products, software models, educational aids or curricula, instruments, or equipment, research materials, interventions (e.g., educational or behavioral), or new business activities.</li>
             </ul>
-            Citations are pulled from your personal statement and all contributions.
+            <p>Each product must follow the NIH Policy on Use of Hypertext in NIH Grant Applications and include full citation information.</p>
         </div>
 
         <!-- Products Closely Related to Proposed Project -->
@@ -122,6 +146,7 @@
                     (<span id="related-products-count">0</span>/5 selected)
                 </span>
             </h3>
+            <p class="text-xs text-gray-500 mb-2">Select up to 5 products</p>
             <div id="related-products-list" class="space-y-2 max-h-64 overflow-y-auto border rounded-lg p-2">
                 <!-- Populated by JavaScript -->
             </div>
@@ -135,21 +160,43 @@
                     (<span id="other-products-count">0</span>/5 selected)
                 </span>
             </h3>
+            <p class="text-xs text-gray-500 mb-2">Select up to 5 products</p>
             <div id="other-products-list" class="space-y-2 max-h-64 overflow-y-auto border rounded-lg p-2">
                 <!-- Populated by JavaScript -->
             </div>
         </div>
     </div>
 
-    <!-- Personal Statement Section -->
+    <!-- ======================= -->
+    <!-- SUPPLEMENT SECTIONS -->
+    <!-- ======================= -->
+
+    <div class="bg-maroon-50 rounded-lg p-4 border border-maroon-200">
+        <h2 class="text-xl font-bold text-maroon-800 mb-2">NIH Biographical Sketch Supplement</h2>
+        <p class="text-sm text-maroon-700">
+            The NIH Biographical Sketch Supplement provides instructions for submission by each individual identified as a senior/key person on a Federally funded research project submitting a Biographical Sketch Common Form. This format page should be appended to the respective Biographical Sketch Common Form of each individual submitting a biographical sketch.
+        </p>
+    </div>
+
+    <!-- Supplement A. Personal Statement Section -->
     {% if data.personal_statement %}
     <div class="bg-white rounded-lg shadow-md p-6">
-        <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center justify-between mb-2">
             <h2 class="text-lg font-semibold text-gray-800 flex items-center">
-                <span class="bg-green-100 text-green-800 px-2 py-1 rounded text-sm mr-2">Supplement A</span>
+                <span class="bg-green-100 text-green-800 px-2 py-1 rounded text-sm mr-2">A</span>
                 Personal Statement
             </h2>
             <button onclick="editPersonalStatement()" id="edit-ps-btn" class="text-maroon-600 hover:text-maroon-700 text-sm">Edit</button>
+        </div>
+
+        <!-- Instructions -->
+        <div class="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800">
+            <p class="mb-2">Briefly describe why you are well suited for your role(s) in this project. Relevant factors may include: aspects of your training; your previous experimental work on this specific topic or related topics; your technical expertise; your collaborators or scientific environment; and/or your past performance in this or related fields, including ongoing and completed research projects from the past three years that you want to highlight.</p>
+            <p class="mb-2">Note the following additional instructions for specific types of applications:</p>
+            <ul class="list-disc list-inside ml-2 mb-2">
+                <li>For instructional research training, institutional career development, or research education grant applications, faculty who are not applicants should include a brief summary of their instructional role and indicate the percent effort they propose to devote to the program.</li>
+            </ul>
+            <p><strong>The Personal Statement is limited to 3,500 characters.</strong></p>
         </div>
 
         <!-- Display Mode -->
@@ -220,11 +267,51 @@
     </div>
     {% endif %}
 
-    <!-- Contributions to Science Section - Interactive -->
+    <!-- Supplement B. Honors Section -->
     <div class="bg-white rounded-lg shadow-md p-6">
-        <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold text-gray-800 mb-2 flex items-center">
+            <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-sm mr-2">B</span>
+            Honors
+        </h2>
+
+        <!-- Instructions -->
+        <div class="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
+            <p class="mb-2">List any relevant academic and professional achievements and honors. In particular:</p>
+            <ul class="list-disc list-inside ml-2 mb-2">
+                <li>Students, postdoctorates, and junior faculty should include scholarships, traineeships, fellowships, and development awards, as applicable.</li>
+                <li>Clinicians should include information on any clinical licensures and specialty board certifications that they have achieved.</li>
+            </ul>
+            <p><strong>The Honors Section is limited to no more than 10 entries.</strong></p>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-2 text-left text-gray-600">Year</th>
+                        <th class="px-4 py-2 text-left text-gray-600">Honor</th>
+                        <th class="px-4 py-2 text-left text-gray-600">Organization</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y">
+                    {% for honor in data.honors %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-2 whitespace-nowrap">{{ honor.year }}</td>
+                        <td class="px-4 py-2">{{ honor.description }}</td>
+                        <td class="px-4 py-2">{{ honor.organization if honor.organization else '' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p class="text-xs text-gray-500 mt-2">{{ data.honors|length }} entries {% if data.honors|length > 10 %}<span class="text-red-600">(exceeds 10 entry limit)</span>{% endif %}</p>
+    </div>
+
+    <!-- Supplement C. Contributions to Science Section -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <div class="flex items-center justify-between mb-2">
             <h2 class="text-lg font-semibold text-gray-800 flex items-center">
-                <span class="bg-orange-100 text-orange-800 px-2 py-1 rounded text-sm mr-2">Supplement C</span>
+                <span class="bg-orange-100 text-orange-800 px-2 py-1 rounded text-sm mr-2">C</span>
                 Contributions to Science
                 <span class="ml-2 text-sm font-normal text-gray-500">
                     (<span id="selected-count">0</span>/5 selected)
@@ -239,8 +326,21 @@
             </div>
         </div>
 
+        <!-- Instructions -->
+        <div class="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg text-sm text-orange-800">
+            <p class="mb-2">All senior/key persons should complete the "Contributions to Science" section. <strong>Briefly describe up to five of your most significant contributions to science.</strong> While all applicants may describe up to five contributions, graduate students and postdoctorates may wish to consider highlighting two or three they consider most significant.</p>
+            <p class="mb-2">For each contribution, include:</p>
+            <ul class="list-disc list-inside ml-2 mb-2">
+                <li>the historical background that frames the scientific problem;</li>
+                <li>the central finding(s);</li>
+                <li>the influence of the finding(s) on the progress of science or the application of those finding(s) to health or technology; and</li>
+                <li>your specific role.</li>
+            </ul>
+            <p><strong>Figures, tables, or graphics are not allowed.</strong></p>
+        </div>
+
         <div class="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
-            <strong>Instructions:</strong> The parser may have split your contributions incorrectly.
+            <strong>Editor Instructions:</strong> The parser may have split your contributions incorrectly.
             Use the checkboxes to select items to merge, then click "Merge Selected".
             Select exactly 5 contributions to use for your SciENcv entry.
         </div>

@@ -318,27 +318,44 @@
 
     <!-- Action Buttons -->
     <div class="bg-white rounded-lg shadow-md p-6">
-        <div class="flex flex-col sm:flex-row gap-4 items-center justify-between">
-            <div class="text-sm text-gray-600">
-                <p class="font-medium">Ready to create your SciENcv entry?</p>
-                <p class="text-xs">A browser window will open. You'll need to log in to SciENcv manually.</p>
-            </div>
-            <div class="flex gap-4">
-                <a href="{{ url_for('api.get_parsed_data', job_id=job_id) }}"
-                   target="_blank"
-                   class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">
-                    View JSON
-                </a>
-                <button onclick="saveAndContinue()"
-                        id="continue-btn"
-                        class="px-6 py-2 bg-maroon-700 text-white rounded-lg font-medium hover:bg-maroon-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                    Save & Start Automation
-                </button>
-            </div>
+        <div class="mb-4">
+            <h3 class="text-lg font-semibold text-gray-800 mb-2">Ready to create your SciENcv entry?</h3>
+            <p class="text-sm text-gray-600 mb-4">Use Claude in Chrome to automatically fill out your SciENcv form with your biosketch data.</p>
         </div>
-        <div id="automation-status" class="mt-4 hidden">
-            <div class="p-4 bg-maroon-50 rounded-lg">
-                <p class="text-maroon-800" id="status-message">Starting automation...</p>
+
+        <!-- Instructions -->
+        <div class="bg-maroon-50 border border-maroon-200 rounded-lg p-4 mb-4">
+            <h4 class="font-medium text-maroon-800 mb-2">How to use with Claude in Chrome:</h4>
+            <ol class="list-decimal list-inside text-sm text-maroon-700 space-y-2">
+                <li>Click <strong>"Copy JSON for Claude"</strong> below to copy your biosketch data</li>
+                <li>Go to <a href="https://www.ncbi.nlm.nih.gov/labs/sciencv/" target="_blank" class="underline hover:text-maroon-900">SciENcv</a> and log in</li>
+                <li>Click <strong>"+ NEW DOCUMENT"</strong> and create a new NIH Biographical Sketch Common Form</li>
+                <li>Open <strong>Claude in Chrome</strong> (browser extension)</li>
+                <li>Paste the JSON and ask Claude to help fill out each section of the form</li>
+            </ol>
+        </div>
+
+        <div class="flex flex-wrap gap-4 items-center">
+            <button onclick="copyJsonForClaude()"
+                    id="copy-json-btn"
+                    class="px-6 py-2 bg-maroon-700 text-white rounded-lg font-medium hover:bg-maroon-800 transition-colors">
+                Copy JSON for Claude
+            </button>
+            <a href="{{ url_for('api.get_parsed_data', job_id=job_id) }}"
+               target="_blank"
+               class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">
+                View JSON
+            </a>
+            <button disabled
+                    class="px-6 py-2 bg-gray-300 text-gray-500 rounded-lg font-medium cursor-not-allowed"
+                    title="Coming soon!">
+                Auto-fill (Coming Soon)
+            </button>
+        </div>
+
+        <div id="copy-status" class="mt-4 hidden">
+            <div class="p-4 bg-green-50 rounded-lg">
+                <p class="text-green-800">JSON copied to clipboard! Paste it into Claude in Chrome.</p>
             </div>
         </div>
     </div>
@@ -855,6 +872,42 @@
             statusMsg.textContent = 'Error: ' + error.message;
             statusDiv.className = 'mt-4 p-4 bg-red-50 rounded-lg';
             statusMsg.className = 'text-red-800';
+        }
+    }
+
+    async function copyJsonForClaude() {
+        // Build the data object with selected contributions and products
+        const selectedContributions = [...selectedIndices]
+            .sort((a, b) => a - b)
+            .map(idx => contributions[idx]);
+
+        const relatedProducts = [...selectedRelatedProducts].map(idx => allCitations[idx]);
+        const otherProducts = [...selectedOtherProducts].map(idx => allCitations[idx]);
+
+        const biosketchData = {
+            name: '{{ data.name }}',
+            era_commons_username: '{{ data.era_commons_username }}',
+            position_title: '{{ data.position_title }}',
+            education: {{ data.education | tojson | safe }},
+            positions: {{ data.positions | tojson | safe }},
+            honors: {{ data.honors | tojson | safe }},
+            personal_statement: personalStatement,
+            contributions: selectedContributions.length > 0 ? selectedContributions : contributions.slice(0, 5),
+            products: {
+                related: relatedProducts,
+                other: otherProducts
+            }
+        };
+
+        const jsonText = JSON.stringify(biosketchData, null, 2);
+
+        try {
+            await navigator.clipboard.writeText(jsonText);
+            const statusDiv = document.getElementById('copy-status');
+            statusDiv.classList.remove('hidden');
+            setTimeout(() => statusDiv.classList.add('hidden'), 5000);
+        } catch (err) {
+            alert('Failed to copy to clipboard. Please use View JSON and copy manually.');
         }
     }
 

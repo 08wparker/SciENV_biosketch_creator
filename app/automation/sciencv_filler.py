@@ -105,6 +105,8 @@ class SciENcvFiller:
 
     async def _create_new_biosketch(self):
         """Navigate to My Documents and create a new biosketch."""
+        from datetime import datetime
+
         page = self._page
 
         # Go to My Documents
@@ -119,19 +121,59 @@ class SciENcvFiller:
         # Click New Document
         self._status("Creating new NIH Biographical Sketch...")
         await page.click(SciENcvSelectors.NEW_DOCUMENT)
-        await page.wait_for_timeout(1000)
+        await page.wait_for_timeout(1500)
 
-        # Select NIH Biographical Sketch
-        await page.click(SciENcvSelectors.NIH_BIOSKETCH)
-        await page.wait_for_load_state('networkidle')
+        # Fill the Create New Document dialog
+        self._status("Filling document creation form...")
 
-        # Set document title
-        self._status("Setting document title...")
-        title = f"{self.data.name} - NIH Biosketch"
+        # Generate document name with user name and date
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        title = f"{self.data.name} {date_str}"
+
+        # Set document name using #docTitle selector
         try:
-            await page.fill(SciENcvSelectors.DOCUMENT_TITLE_INPUT, title)
-        except Exception:
-            self._status("Could not set document title - will use default")
+            name_input = page.locator('#docTitle')
+            await name_input.click()
+            await name_input.fill(title)
+            self._status(f"Set document name: {title}")
+        except Exception as e:
+            self._status(f"Could not set document name: {e}")
+
+        await page.wait_for_timeout(500)
+
+        # Select Document type dropdown using #docType (Material UI Select)
+        try:
+            # Click on the dropdown to open it
+            dropdown = page.locator('#docType')
+            await dropdown.click()
+            await page.wait_for_timeout(800)
+
+            # Select NIH Biographical Sketch Common Form from the listbox
+            await page.click('text="NIH Biographical Sketch Common Form"')
+            await page.wait_for_timeout(500)
+            self._status("Selected NIH Biographical Sketch Common Form")
+        except Exception as e:
+            self._status(f"Could not select document type: {e}")
+
+        # Select "Start with a blank document" radio button
+        try:
+            blank_option = page.locator('text="Start with a blank document"')
+            await blank_option.click()
+            self._status("Selected blank document option")
+        except Exception as e:
+            self._status(f"Could not select data source: {e}")
+
+        await page.wait_for_timeout(500)
+
+        # Click CREATE button using semantic class
+        try:
+            create_btn = page.locator('button.submit-dialog-button')
+            await create_btn.click()
+            await page.wait_for_load_state('networkidle')
+            await page.wait_for_timeout(2000)
+            self._status("Document created successfully!")
+        except Exception as e:
+            self._status(f"Could not click CREATE: {e}")
 
     async def _fill_education(self):
         """Fill the Education/Training section."""

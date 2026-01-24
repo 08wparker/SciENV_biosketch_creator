@@ -16,6 +16,8 @@ from ..firestore_models import (
     delete_biosketch as firestore_delete_biosketch,
     update_biosketch_data
 )
+# Automation is "Coming Soon" - import disabled
+# from ..automation.sciencv_filler import run_automation
 
 
 # Create blueprints
@@ -40,12 +42,20 @@ def get_upload_path(filename: str) -> Path:
 def get_biosketch_data_helper(job_id: str, user_id: str = None):
     """Get biosketch data from Firestore or memory.
 
-    Tries Firestore first if user_id provided, falls back to memory.
+    Tries Firestore first (with user_id if provided), falls back to memory.
     """
+    # Try with user_id verification first
     if user_id:
         data = firestore_get_biosketch_data(job_id, user_id)
         if data:
             return data
+
+    # Try Firestore without user_id verification (for direct page navigation)
+    data = firestore_get_biosketch_data(job_id, None)
+    if data:
+        return data
+
+    # Fall back to in-memory store
     return parsed_data_store.get(job_id)
 
 
@@ -206,26 +216,21 @@ def delete_biosketch(job_id: str):
     return jsonify({'status': 'success'})
 
 
+# Automation is "Coming Soon" - function disabled
+# def run_automation_in_thread(data: dict):
+#     """Run the async automation in a separate thread."""
+#     pass
+
+
 @api_bp.route('/automate/<job_id>', methods=['POST'])
 @firebase_auth_optional
 def start_automation(job_id: str):
-    """Start the SciENcv automation process."""
-    user_id = getattr(g, 'user_id', None)
-    data = get_biosketch_data_helper(job_id, user_id)
-
-    if not data:
-        data = parsed_data_store.get(job_id)
-
-    if not data:
-        return jsonify({'error': 'Job not found'}), 404
-
-    # In a full implementation, this would trigger a Celery task
-    # For now, we'll return the automation status endpoint
+    """Start the SciENcv automation process - Coming Soon."""
+    # Automation is "Coming Soon" - return message to use Claude in Chrome instead
     return jsonify({
-        'status': 'started',
+        'status': 'coming_soon',
         'job_id': job_id,
-        'message': 'Automation will open a browser window. Please log in to SciENcv when prompted.',
-        'sse_endpoint': url_for('api.automation_status', job_id=job_id)
+        'message': 'Auto-fill is coming soon! Please use "Copy JSON for Claude" and paste into Claude in Chrome to fill out your SciENcv form.'
     })
 
 

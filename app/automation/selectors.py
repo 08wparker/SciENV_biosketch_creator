@@ -10,12 +10,21 @@ class SciENcvSelectors:
 
     # ============ Authentication ============
     LOGIN_BUTTON = 'button:has-text("Log In"), a:has-text("Log In")'
-    LOGGED_IN_INDICATOR = 'text=My Documents, text=My NCBI'
+    LOGGED_IN_INDICATOR = 'text="My Documents"'
 
     # ============ Document Management ============
-    MY_DOCUMENTS = 'text=My Documents'
-    NEW_DOCUMENT = 'button:has-text("New Document"), a:has-text("New Document")'
-    NIH_BIOSKETCH = 'text=NIH Biographical Sketch'
+    MY_DOCUMENTS = 'text="My Documents"'
+    NEW_DOCUMENT = 'button:has-text("NEW DOCUMENT")'
+
+    # Create New Document dialog
+    DOCUMENT_NAME_INPUT = 'input[aria-label*="Document Name"], input[placeholder*="Document Name"], input:near(:text("Document Name"))'
+    DOCUMENT_TYPE_DROPDOWN = 'select:near(:text("Document type")), [role="combobox"]:near(:text("Document type"))'
+    NIH_BIOSKETCH_OPTION = 'text="NIH Biographical Sketch"'
+    DATA_SOURCE_BLANK = 'text="Start with a blank document"'
+    CREATE_BUTTON = 'button:has-text("CREATE")'
+
+    # Legacy selectors
+    NIH_BIOSKETCH = 'text="NIH Biographical Sketch"'
     DOCUMENT_TITLE_INPUT = 'input[name="documentTitle"], input[placeholder*="title"]'
 
     # ============ General Form Elements ============

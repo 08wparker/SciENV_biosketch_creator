@@ -15,3 +15,6 @@ python-docx==1.1.0
 
 # Utilities
 Werkzeug==3.0.1
+
+# Browser automation (for local use - not installed on Cloud Run)
+# playwright==1.40.0

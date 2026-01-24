@@ -1,82 +1,155 @@
-"""CSS Selectors for SciENcv web interface.
+"""Accessibility-based selectors for SciENcv web interface.
 
-These selectors may need to be updated if the SciENcv interface changes.
-Keep all selectors in one place for easy maintenance.
+These selectors are derived from Claude in Chrome browser extension inspection
+of the SciENcv website. They use ARIA roles and labels for reliability.
+
+Playwright methods to use:
+- page.get_by_role("button", name="...")
+- page.get_by_role("textbox", name="...")
+- page.get_by_role("combobox", name="...")
+- page.get_by_role("radio", name="...")
+- page.get_by_role("checkbox", name="...")
+- page.get_by_role("option", name="...")
 """
 
 
-class SciENcvSelectors:
-    """CSS selectors for SciENcv elements."""
+class Selectors:
+    """Accessibility-based selectors organized by section."""
 
     # ============ Authentication ============
-    LOGIN_BUTTON = 'button:has-text("Log In"), a:has-text("Log In")'
-    LOGGED_IN_INDICATOR = 'text="My Documents"'
+    class Auth:
+        LOGGED_IN_INDICATOR = 'text="My Documents"'
+        SCIENCV_URL = 'https://www.ncbi.nlm.nih.gov/labs/sciencv/'
 
-    # ============ Document Management ============
+    # ============ Create New Document ============
+    class CreateDocument:
+        # Buttons
+        NEW_DOCUMENT_BUTTON = ("button", "NEW DOCUMENT")
+        CREATE_BUTTON = ("button", "CREATE")
+
+        # Form fields
+        DOCUMENT_NAME = ("textbox", "Document Name *")
+        DOCUMENT_TYPE = ("button", "Document type")  # Opens dropdown
+
+        # Radio buttons for data source
+        EXTERNAL_SOURCE = ("radio", "Use an external source")
+        EXISTING_DOCUMENT = ("radio", "Use an existing document in SciENcv")
+        BLANK_DOCUMENT = ("radio", "Start with a blank document")
+
+        # Dropdowns (when data source selected)
+        SOURCE_DROPDOWN = ("combobox", "Source *")
+        DOCUMENT_DROPDOWN = ("combobox", "Document *")
+
+        # Document type option
+        NIH_BIOSKETCH_OPTION = "NIH Biographical Sketch Common Form"
+
+    # ============ A. Professional Preparation (Education) ============
+    class Education:
+        ADD_BUTTON = ("button", "ADD PROFESSIONAL PREPARATION")
+
+        # Type selection
+        DEGREE_RADIO = ("radio", "Degree")  # Default
+        TRAINING_RADIO = ("radio", "Training")
+
+        # Form fields
+        ORGANIZATION = ("textbox", "Organization *")
+        CITY = ("textbox", "City *")
+        COUNTRY = ("combobox", "Country *")
+        STATE = ("combobox", "State/Province *")
+        DEGREE = ("combobox", "Degree *")
+        FIELD_OF_STUDY = ("textbox", "Field of Study *")
+        START_DATE = ("textbox", "Start Date")
+        END_DATE = ("textbox", "End Date")
+
+        # Save buttons
+        SAVE_BUTTON = ("button", "SAVE")
+        SAVE_AND_ADD_BUTTON = ("button", "SAVE & ADD ANOTHER ENTRY")
+
+    # ============ B. Appointments and Positions ============
+    class Appointments:
+        ADD_BUTTON = ("button", "ADD APPOINTMENT/POSITION")
+
+        # Form fields
+        TITLE = ("textbox", "Title *")
+        ORGANIZATION = ("textbox", "Organization/Department *")
+        CITY = ("textbox", "City")
+        COUNTRY = ("combobox", "Country")
+        STATE = ("combobox", "State/Province")
+        START_YEAR = ("textbox", "Start Year *")
+        END_YEAR = ("textbox", "End Year")
+        CURRENT_POSITION = ("checkbox", "Current Position")
+
+        # Save buttons
+        SAVE_BUTTON = ("button", "SAVE")
+        SAVE_AND_ADD_BUTTON = ("button", "SAVE & ADD ANOTHER")
+
+    # ============ C. Products ============
+    class Products:
+        # Selection buttons
+        SELECT_RELATED_BUTTON = ("button", "SELECT RELATED PRODUCTS")
+        SELECT_OTHER_BUTTON = ("button", "SELECT OTHER PRODUCTS")
+
+        # Search and selection
+        SEARCH_INPUT = ("textbox", "Search citations")
+        CITATION_CHECKBOX = ("checkbox", "Citation for:")
+
+        # Save
+        CONTINUE_BUTTON = ("button", "CONTINUE")
+
+    # ============ Supplement A. Personal Statement ============
+    class PersonalStatement:
+        ADD_BUTTON = ("button", "ADD PERSONAL STATEMENT")
+
+        # Form field - character limit is 3,500
+        TEXT_AREA = ("textbox", "Personal Statement *")
+
+        # Save buttons
+        SAVE_BUTTON = ("button", "SAVE")
+        CANCEL_BUTTON = ("button", "CANCEL")
+
+    # ============ Supplement B. Honors ============
+    class Honors:
+        ADD_BUTTON = ("button", "ADD HONOR")
+
+        # Form fields
+        HONOR = ("textbox", "Honor *")
+        ORGANIZATION = ("textbox", "Name of Organization *")
+        YEAR = ("textbox", "Year *")  # Format: yyyy
+        END_YEAR = ("textbox", "End Year")  # Optional, for date ranges
+
+        # Save buttons
+        SAVE_BUTTON = ("button", "SAVE")
+        SAVE_AND_ADD_BUTTON = ("button", "SAVE & ADD ANOTHER")
+
+    # ============ Supplement C. Contributions to Science ============
+    class Contributions:
+        ADD_BUTTON = ("button", "ADD CONTRIBUTION TO SCIENCE")
+        ADD_ANOTHER_BUTTON = ("button", "ADD ANOTHER CONTRIBUTION TO SCIENCE")
+
+        # Form field - character limit is 2,000 per contribution
+        DESCRIPTION = ("textbox", "Description")  # or textarea
+
+        # Save buttons
+        SAVE_BUTTON = ("button", "SAVE")
+        CANCEL_BUTTON = ("button", "CANCEL")
+
+        # After saving, citation buttons appear
+        ADD_CITATION_BUTTON = ("button", "ADD CITATION")
+
+    # ============ Citation Selection (shared) ============
+    class Citations:
+        SEARCH_INPUT = ("textbox", "Search")
+        PMID_INPUT = ("textbox", "PMID")
+        CITATION_CHECKBOX = ("checkbox", "")  # Dynamic based on citation
+        SELECT_BUTTON = ("button", "SELECT")
+        CANCEL_BUTTON = ("button", "CANCEL")
+
+
+# Legacy class for backwards compatibility
+class SciENcvSelectors:
+    """Legacy selectors - deprecated, use Selectors class instead."""
+
+    LOGGED_IN_INDICATOR = 'text="My Documents"'
     MY_DOCUMENTS = 'text="My Documents"'
     NEW_DOCUMENT = 'button:has-text("NEW DOCUMENT")'
-
-    # Create New Document dialog
-    DOCUMENT_NAME_INPUT = 'input[aria-label*="Document Name"], input[placeholder*="Document Name"], input:near(:text("Document Name"))'
-    DOCUMENT_TYPE_DROPDOWN = 'select:near(:text("Document type")), [role="combobox"]:near(:text("Document type"))'
-    NIH_BIOSKETCH_OPTION = 'text="NIH Biographical Sketch"'
-    DATA_SOURCE_BLANK = 'text="Start with a blank document"'
-    CREATE_BUTTON = 'button:has-text("CREATE")'
-
-    # Legacy selectors
-    NIH_BIOSKETCH = 'text="NIH Biographical Sketch"'
-    DOCUMENT_TITLE_INPUT = 'input[name="documentTitle"], input[placeholder*="title"]'
-
-    # ============ General Form Elements ============
-    SAVE_BUTTON = 'button:has-text("Save")'
-    CANCEL_BUTTON = 'button:has-text("Cancel")'
-    ADD_BUTTON = 'button:has-text("Add")'
-    EDIT_BUTTON = 'button:has-text("Edit")'
-    DELETE_BUTTON = 'button:has-text("Delete")'
-    NEXT_BUTTON = 'button:has-text("Next")'
-    DONE_BUTTON = 'button:has-text("Done")'
-
-    # ============ Education/Training Section ============
-    EDUCATION_SECTION = 'text=Education/Training'
-    ADD_EDUCATION = 'button:has-text("Add Education"), button:has-text("Add Training")'
-    INSTITUTION_INPUT = 'input[name*="institution"], input[placeholder*="Institution"]'
-    DEGREE_INPUT = 'input[name*="degree"], select[name*="degree"]'
-    COMPLETION_DATE_INPUT = 'input[name*="date"], input[placeholder*="MM/YYYY"]'
-    FIELD_OF_STUDY_INPUT = 'input[name*="field"], input[placeholder*="Field"]'
-
-    # ============ Personal Statement Section ============
-    PERSONAL_STATEMENT_SECTION = 'text=Personal Statement'
-    PERSONAL_STATEMENT_TEXTAREA = 'textarea[name*="personalStatement"], textarea[placeholder*="Personal Statement"]'
-
-    # ============ Positions Section ============
-    POSITIONS_SECTION = 'text=Positions'
-    ADD_POSITION = 'button:has-text("Add Position")'
-    POSITION_TITLE_INPUT = 'input[name*="title"], input[placeholder*="Title"]'
-    POSITION_ORG_INPUT = 'input[name*="organization"], input[placeholder*="Organization"]'
-    POSITION_START_DATE = 'input[name*="startDate"]'
-    POSITION_END_DATE = 'input[name*="endDate"]'
-
-    # ============ Honors Section ============
-    HONORS_SECTION = 'text=Honors'
-    ADD_HONOR = 'button:has-text("Add Honor")'
-    HONOR_YEAR_INPUT = 'input[name*="year"]'
-    HONOR_DESCRIPTION_INPUT = 'input[name*="description"], textarea[name*="description"]'
-
-    # ============ Contributions Section ============
-    CONTRIBUTIONS_SECTION = 'text=Contributions to Science'
-    ADD_CONTRIBUTION = 'button:has-text("Add Contribution")'
-    CONTRIBUTION_NARRATIVE = 'textarea[name*="contribution"], textarea[name*="narrative"]'
-
-    # ============ Citations Section ============
-    ADD_CITATION = 'button:has-text("Add Citation"), button:has-text("Add Publication")'
-    CITATION_SEARCH = 'input[name*="citation"], input[placeholder*="Search"]'
-    PMID_INPUT = 'input[name*="pmid"], input[placeholder*="PMID"]'
-
-    # ============ Navigation ============
-    SECTIONS_NAV = '.sections-nav, nav.document-sections'
-    SECTION_LINK_TEMPLATE = 'a:has-text("{section_name}")'
-
-    @classmethod
-    def section_link(cls, section_name: str) -> str:
-        """Get selector for a specific section navigation link."""
-        return cls.SECTION_LINK_TEMPLATE.format(section_name=section_name)
+    SAVE_BUTTON = 'button:has-text("SAVE")'

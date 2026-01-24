@@ -16,8 +16,15 @@ from ..firestore_models import (
     delete_biosketch as firestore_delete_biosketch,
     update_biosketch_data
 )
-# Automation is "Coming Soon" - import disabled
-# from ..automation.sciencv_filler import run_automation
+
+# Try to import automation (only works if Playwright is installed)
+try:
+    from ..automation.sciencv_filler import run_automation
+    import asyncio
+    AUTOMATION_AVAILABLE = True
+except ImportError:
+    AUTOMATION_AVAILABLE = False
+    run_automation = None
 
 
 # Create blueprints
@@ -216,21 +223,65 @@ def delete_biosketch(job_id: str):
     return jsonify({'status': 'success'})
 
 
-# Automation is "Coming Soon" - function disabled
-# def run_automation_in_thread(data: dict):
-#     """Run the async automation in a separate thread."""
-#     pass
+def run_automation_sync(data: dict, on_status=None):
+    """Run the async automation synchronously."""
+    if not AUTOMATION_AVAILABLE:
+        return False
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(run_automation(data, headless=False, on_status=on_status))
+    finally:
+        loop.close()
 
 
 @api_bp.route('/automate/<job_id>', methods=['POST'])
 @firebase_auth_optional
-def start_automation(job_id: str):
-    """Start the SciENcv automation process - Coming Soon."""
-    # Automation is "Coming Soon" - return message to use Claude in Chrome instead
+def start_automation_route(job_id: str):
+    """Start the SciENcv automation process.
+
+    Automation requires Playwright to be installed locally.
+    On Cloud Run, returns a message to use Claude in Chrome instead.
+    """
+    # Check if automation is available
+    if not AUTOMATION_AVAILABLE:
+        return jsonify({
+            'status': 'coming_soon',
+            'job_id': job_id,
+            'message': 'Auto-fill requires running locally with Playwright installed. Please use "Copy JSON for Claude" and paste into Claude in Chrome to fill out your SciENcv form.'
+        })
+
+    user_id = getattr(g, 'user_id', None)
+
+    # Get biosketch data
+    data = get_biosketch_data_helper(job_id, user_id)
+    if not data:
+        data = parsed_data_store.get(job_id)
+
+    if not data:
+        return jsonify({'error': 'Job not found'}), 404
+
+    # Start automation in background thread
+    import threading
+
+    def run_in_thread():
+        def status_callback(msg):
+            print(f"[Automation] {msg}")
+
+        try:
+            success = run_automation_sync(data, on_status=status_callback)
+            print(f"[Automation] Completed: {'success' if success else 'failed'}")
+        except Exception as e:
+            print(f"[Automation] Error: {e}")
+
+    thread = threading.Thread(target=run_in_thread, daemon=True)
+    thread.start()
+
     return jsonify({
-        'status': 'coming_soon',
+        'status': 'started',
         'job_id': job_id,
-        'message': 'Auto-fill is coming soon! Please use "Copy JSON for Claude" and paste into Claude in Chrome to fill out your SciENcv form.'
+        'message': 'Automation started. A browser window will open - please log in to SciENcv when prompted.'
     })
 
 

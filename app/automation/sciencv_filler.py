@@ -1,332 +1,470 @@
-"""Main SciENcv automation module using Playwright.
+"""SciENcv Biosketch Automation using Playwright.
 
-This module handles the browser automation to fill in SciENcv biosketch entries.
-It requires the user to manually log in (due to 2FA requirements), then
-automates the form filling process.
+This module automates filling in NIH Biographical Sketch Common Form entries
+on SciENcv. It uses accessibility-based selectors derived from Claude in Chrome
+browser extension inspection.
+
+Flow:
+1. User logs in manually (2FA required)
+2. Automation creates a new document
+3. Fills each section in order:
+   - A. Professional Preparation
+   - B. Appointments and Positions
+   - C. Products
+   - Supplement A. Personal Statement
+   - Supplement B. Honors
+   - Supplement C. Contributions to Science
 """
 
 from __future__ import annotations
 import asyncio
+from datetime import datetime
 from typing import Optional, Callable, Dict, Any, List
+from dataclasses import dataclass
 
-from playwright.async_api import async_playwright, Page, Browser, BrowserContext
+from playwright.async_api import async_playwright, Page, Browser, BrowserContext, Locator
 
-from ..parser.models import BiosketchData, Education, Position, Honor, Contribution
-from .auth_handler import AuthHandler
-from .selectors import SciENcvSelectors
+from .selectors import Selectors
 
 
-class SciENcvFiller:
+@dataclass
+class BiosketchData:
+    """Structured biosketch data from the app."""
+    name: str
+    era_commons_username: str
+    position_title: str
+    education: List[Dict[str, Any]]
+    positions: List[Dict[str, Any]]
+    honors: List[Dict[str, Any]]
+    personal_statement: Dict[str, Any]
+    contributions: List[Dict[str, Any]]
+    products: Dict[str, List[Dict[str, Any]]]  # {related: [], other: []}
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'BiosketchData':
+        """Create BiosketchData from dictionary."""
+        return cls(
+            name=data.get('name', ''),
+            era_commons_username=data.get('era_commons_username', ''),
+            position_title=data.get('position_title', ''),
+            education=data.get('education', []),
+            positions=data.get('positions', []),
+            honors=data.get('honors', []),
+            personal_statement=data.get('personal_statement', {}),
+            contributions=data.get('contributions', []),
+            products=data.get('products', {'related': [], 'other': []})
+        )
+
+
+class SciENcvAutomation:
     """Automates filling in SciENcv biosketch forms."""
+
+    SCIENCV_URL = 'https://www.ncbi.nlm.nih.gov/labs/sciencv/'
+    LOGIN_TIMEOUT = 300000  # 5 minutes for user to complete login
 
     def __init__(
         self,
         data: BiosketchData,
         headless: bool = False,
-        browser_state_path: Optional[str] = None,
-        on_status_update: Optional[Callable[[str], None]] = None
+        on_status: Optional[Callable[[str], None]] = None
     ):
-        """Initialize the filler.
+        """Initialize the automation.
 
         Args:
             data: Parsed biosketch data to fill
             headless: Whether to run browser in headless mode (default False for login)
-            browser_state_path: Path for browser session persistence
-            on_status_update: Callback for status updates
+            on_status: Callback for status updates
         """
         self.data = data
         self.headless = headless
-        self.on_status_update = on_status_update or print
-
-        self.auth_handler = AuthHandler(
-            browser_state_path=browser_state_path,
-            on_status_update=self.on_status_update
-        )
-
-        self._browser: Optional[Browser] = None
-        self._context: Optional[BrowserContext] = None
+        self.on_status = on_status or print
         self._page: Optional[Page] = None
 
     def _status(self, message: str):
         """Send status update."""
-        self.on_status_update(message)
+        self.on_status(f"[SciENcv] {message}")
 
-    async def start(self) -> bool:
-        """Start the automation process.
+    async def _click(self, role: str, name: str, exact: bool = False):
+        """Click an element by role and name."""
+        await self._page.get_by_role(role, name=name, exact=exact).click()
+        await self._page.wait_for_timeout(300)
+
+    async def _fill(self, role: str, name: str, value: str):
+        """Fill a text input by role and name."""
+        locator = self._page.get_by_role(role, name=name)
+        await locator.click()
+        await locator.fill(value)
+
+    async def _select_dropdown(self, role: str, name: str, option_text: str):
+        """Select an option from a dropdown/combobox."""
+        # Click to open dropdown
+        await self._page.get_by_role(role, name=name).click()
+        await self._page.wait_for_timeout(300)
+
+        # Type to filter and select
+        await self._page.keyboard.type(option_text[:4])
+        await self._page.wait_for_timeout(200)
+        await self._page.keyboard.press('Enter')
+        await self._page.wait_for_timeout(200)
+
+    async def run(self) -> bool:
+        """Run the complete automation process.
 
         Returns:
             True if automation completed successfully, False otherwise
         """
         try:
             async with async_playwright() as p:
-                # Launch browser (always headed for login)
                 self._status("Launching browser...")
-                self._browser = await p.chromium.launch(headless=self.headless)
+                browser = await p.chromium.launch(headless=self.headless)
+                context = await browser.new_context()
+                self._page = await context.new_page()
 
-                # Create context with potential saved state
-                self._context = await self.auth_handler.create_context_with_state(
-                    self._browser
-                )
-
-                # Create page
-                self._page = await self._context.new_page()
-
-                # Handle login
-                logged_in = await self.auth_handler.wait_for_login(self._page)
-                if not logged_in:
-                    self._status("Login failed. Please try again.")
+                # Step 1: Login
+                if not await self._wait_for_login():
                     return False
 
-                # Save session for future use
-                await self.auth_handler.save_session(self._context)
+                # Step 2: Create new document
+                await self._create_document()
 
-                # Create new biosketch
-                self._status("Creating new biosketch document...")
-                await self._create_new_biosketch()
-
-                # Fill each section
-                await self._fill_education()
+                # Step 3: Fill each section
+                await self._fill_professional_preparation()
+                await self._fill_appointments()
+                await self._fill_products()
                 await self._fill_personal_statement()
-                await self._fill_positions()
                 await self._fill_honors()
                 await self._fill_contributions()
 
-                self._status("Biosketch automation complete!")
+                self._status("Automation complete! Review your biosketch in the browser.")
+
+                # Keep browser open for review
+                self._status("Press Ctrl+C when done reviewing to close the browser.")
+                try:
+                    await asyncio.sleep(3600)  # Wait up to 1 hour
+                except asyncio.CancelledError:
+                    pass
+
                 return True
 
         except Exception as e:
-            self._status(f"Error during automation: {str(e)}")
+            self._status(f"Error: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return False
-        finally:
-            if self._browser:
-                # Keep browser open for user to review
-                self._status("Browser will remain open for you to review and finalize.")
-                # Don't close: await self._browser.close()
 
-    async def _create_new_biosketch(self):
-        """Navigate to My Documents and create a new biosketch."""
-        from datetime import datetime
+    async def _wait_for_login(self) -> bool:
+        """Navigate to SciENcv and wait for user to log in."""
+        self._status("Navigating to SciENcv...")
+        await self._page.goto(self.SCIENCV_URL)
 
-        page = self._page
-
-        # Go to My Documents
-        self._status("Navigating to My Documents...")
+        # Check if already logged in
         try:
-            await page.click(SciENcvSelectors.MY_DOCUMENTS)
-            await page.wait_for_load_state('networkidle')
+            await self._page.wait_for_selector('text="My Documents"', timeout=5000)
+            self._status("Already logged in!")
+            return True
         except Exception:
-            # May already be on documents page
             pass
 
-        # Click New Document
+        self._status("Please log in to SciENcv in the browser window...")
+        self._status("(You have 5 minutes to complete login with 2FA)")
+
+        try:
+            await self._page.wait_for_selector('text="My Documents"', timeout=self.LOGIN_TIMEOUT)
+            self._status("Login successful!")
+            return True
+        except Exception:
+            self._status("Login timed out. Please try again.")
+            return False
+
+    async def _create_document(self):
+        """Create a new NIH Biographical Sketch document."""
         self._status("Creating new NIH Biographical Sketch...")
-        await page.click(SciENcvSelectors.NEW_DOCUMENT)
-        await page.wait_for_timeout(1500)
 
-        # Fill the Create New Document dialog
-        self._status("Filling document creation form...")
+        # Click NEW DOCUMENT button
+        await self._click("button", "NEW DOCUMENT")
+        await self._page.wait_for_timeout(1000)
 
-        # Generate document name with user name and date
+        # Generate document name
         date_str = datetime.now().strftime("%Y-%m-%d")
-        title = f"{self.data.name} {date_str}"
+        doc_name = f"{self.data.name} {date_str}"
 
-        # Set document name using #docTitle selector
-        try:
-            name_input = page.locator('#docTitle')
-            await name_input.click()
-            await name_input.fill(title)
-            self._status(f"Set document name: {title}")
-        except Exception as e:
-            self._status(f"Could not set document name: {e}")
+        # Fill document name
+        await self._fill("textbox", "Document Name *", doc_name)
+        self._status(f"Document name: {doc_name}")
 
-        await page.wait_for_timeout(500)
+        # Select document type
+        await self._click("button", "Document type")
+        await self._page.wait_for_timeout(500)
+        await self._page.get_by_role("option", name="NIH Biographical Sketch Common Form").click()
+        await self._page.wait_for_timeout(300)
+        self._status("Selected: NIH Biographical Sketch Common Form")
 
-        # Select Document type dropdown using #docType (Material UI Select)
-        try:
-            # Click on the dropdown to open it
-            dropdown = page.locator('#docType')
-            await dropdown.click()
-            await page.wait_for_timeout(800)
+        # Select "Start with a blank document"
+        await self._click("radio", "Start with a blank document")
 
-            # Select NIH Biographical Sketch Common Form from the listbox
-            await page.click('text="NIH Biographical Sketch Common Form"')
-            await page.wait_for_timeout(500)
-            self._status("Selected NIH Biographical Sketch Common Form")
-        except Exception as e:
-            self._status(f"Could not select document type: {e}")
+        # Click CREATE
+        await self._click("button", "CREATE")
+        await self._page.wait_for_load_state('networkidle')
+        await self._page.wait_for_timeout(2000)
+        self._status("Document created!")
 
-        # Select "Start with a blank document" radio button
-        try:
-            blank_option = page.locator('text="Start with a blank document"')
-            await blank_option.click()
-            self._status("Selected blank document option")
-        except Exception as e:
-            self._status(f"Could not select data source: {e}")
-
-        await page.wait_for_timeout(500)
-
-        # Click CREATE button using semantic class
-        try:
-            create_btn = page.locator('button.submit-dialog-button')
-            await create_btn.click()
-            await page.wait_for_load_state('networkidle')
-            await page.wait_for_timeout(2000)
-            self._status("Document created successfully!")
-        except Exception as e:
-            self._status(f"Could not click CREATE: {e}")
-
-    async def _fill_education(self):
-        """Fill the Education/Training section."""
+    async def _fill_professional_preparation(self):
+        """Fill Section A: Professional Preparation (Education/Training)."""
         if not self.data.education:
             self._status("No education entries to add")
             return
 
         self._status(f"Adding {len(self.data.education)} education entries...")
 
-        # Navigate to education section
-        try:
-            await self._page.click(SciENcvSelectors.EDUCATION_SECTION)
-            await self._page.wait_for_load_state('networkidle')
-        except Exception:
-            pass
-
         for i, edu in enumerate(self.data.education):
-            self._status(f"Adding education {i + 1}/{len(self.data.education)}: {edu.institution}")
-            await self._add_education_entry(edu)
+            is_last = (i == len(self.data.education) - 1)
+            await self._add_education_entry(edu, is_last)
+            self._status(f"  Added: {edu.get('institution', 'Unknown')} - {edu.get('degree', '')}")
 
-    async def _add_education_entry(self, edu: Education):
-        """Add a single education entry."""
-        page = self._page
+    async def _add_education_entry(self, edu: Dict[str, Any], is_last: bool = False):
+        """Add a single education/training entry."""
+        # Click ADD PROFESSIONAL PREPARATION
+        await self._click("button", "ADD PROFESSIONAL PREPARATION")
+        await self._page.wait_for_timeout(800)
 
-        try:
-            # Click Add Education
-            await page.click(SciENcvSelectors.ADD_EDUCATION)
-            await page.wait_for_timeout(500)
+        # Determine if this is a training entry (postdoc, fellowship, residency)
+        degree = edu.get('degree', '').lower()
+        is_training = any(t in degree for t in ['postdoc', 'fellow', 'resident', 'training', 'intern'])
 
-            # Fill fields
-            await page.fill(SciENcvSelectors.INSTITUTION_INPUT, edu.institution)
-            await page.fill(SciENcvSelectors.DEGREE_INPUT, edu.degree)
-            await page.fill(SciENcvSelectors.COMPLETION_DATE_INPUT, edu.completion_date)
-            await page.fill(SciENcvSelectors.FIELD_OF_STUDY_INPUT, edu.field_of_study)
+        if is_training:
+            await self._click("radio", "Training")
+            await self._page.wait_for_timeout(300)
 
-            # Save
-            await page.click(SciENcvSelectors.SAVE_BUTTON)
-            await page.wait_for_timeout(500)
-        except Exception as e:
-            self._status(f"Error adding education entry: {e}")
+        # Fill Organization
+        await self._fill("textbox", "Organization *", edu.get('institution', ''))
+
+        # Fill City (parse from location if needed)
+        location = edu.get('location', '')
+        city = location.split(',')[0].strip() if location else 'Chicago'
+        await self._fill("textbox", "City *", city)
+
+        # Select State/Province (US assumed)
+        state = self._parse_state(location)
+        if state:
+            await self._select_dropdown("combobox", "State/Province *", state)
+
+        # Select Degree
+        degree_value = edu.get('degree', '')
+        if degree_value:
+            try:
+                await self._select_dropdown("combobox", "Degree *", degree_value)
+            except Exception:
+                # Try common abbreviations
+                pass
+
+        # Fill Field of Study
+        await self._fill("textbox", "Field of Study *", edu.get('field_of_study', ''))
+
+        # Fill dates
+        completion_date = edu.get('completion_date', '')
+        if completion_date:
+            # Parse date - could be "2012", "06/2012", "Jun 2012", etc.
+            end_date = self._parse_date_for_sciencv(completion_date)
+            await self._fill("textbox", "End Date", end_date)
+
+        # Save
+        if is_last:
+            await self._click("button", "SAVE")
+        else:
+            await self._click("button", "SAVE & ADD ANOTHER ENTRY")
+
+        await self._page.wait_for_timeout(500)
+
+    async def _fill_appointments(self):
+        """Fill Section B: Appointments and Positions."""
+        if not self.data.positions:
+            self._status("No positions to add")
+            return
+
+        self._status(f"Adding {len(self.data.positions)} appointments/positions...")
+
+        for i, pos in enumerate(self.data.positions):
+            is_last = (i == len(self.data.positions) - 1)
+            await self._add_appointment_entry(pos, is_last)
+            self._status(f"  Added: {pos.get('title', 'Unknown')}")
+
+    async def _add_appointment_entry(self, pos: Dict[str, Any], is_last: bool = False):
+        """Add a single appointment/position entry."""
+        # Click ADD APPOINTMENT/POSITION
+        await self._click("button", "ADD APPOINTMENT/POSITION")
+        await self._page.wait_for_timeout(800)
+
+        # Fill Title
+        await self._fill("textbox", "Title *", pos.get('title', ''))
+
+        # Fill Organization
+        await self._fill("textbox", "Organization/Department *", pos.get('institution', ''))
+
+        # Parse dates (format: "2021-Present" or "2015-2019")
+        dates = pos.get('dates', '').replace('–', '-').replace('—', '-')
+        parts = dates.split('-')
+        start_year = parts[0].strip() if parts else ''
+        end_year = parts[1].strip() if len(parts) > 1 else ''
+
+        # Fill Start Year
+        if start_year:
+            await self._fill("textbox", "Start Year *", start_year)
+
+        # Handle current position
+        if end_year.lower() == 'present' or not end_year:
+            try:
+                await self._click("checkbox", "Current Position")
+            except Exception:
+                pass
+        elif end_year:
+            await self._fill("textbox", "End Year", end_year)
+
+        # Save
+        if is_last:
+            await self._click("button", "SAVE")
+        else:
+            await self._click("button", "SAVE & ADD ANOTHER")
+
+        await self._page.wait_for_timeout(500)
+
+    async def _fill_products(self):
+        """Fill Section C: Products."""
+        related = self.data.products.get('related', [])
+        other = self.data.products.get('other', [])
+
+        if not related and not other:
+            self._status("No products to add")
+            return
+
+        # Add related products
+        if related:
+            self._status(f"Adding {len(related)} related products...")
+            await self._add_products_section(related, "SELECT RELATED PRODUCTS")
+
+        # Add other significant products
+        if other:
+            self._status(f"Adding {len(other)} other significant products...")
+            await self._add_products_section(other, "SELECT OTHER PRODUCTS")
+
+    async def _add_products_section(self, products: List[Dict[str, Any]], button_name: str):
+        """Add products to a specific section."""
+        # Click SELECT button
+        await self._click("button", button_name)
+        await self._page.wait_for_timeout(1000)
+
+        for product in products:
+            pmid = product.get('pmid', '')
+            if pmid:
+                # Search by PMID
+                search_input = self._page.get_by_role("textbox", name="Search citations")
+                await search_input.click()
+                await search_input.clear()
+                await search_input.fill(pmid)
+                await self._page.keyboard.press('Enter')
+                await self._page.wait_for_timeout(1500)
+
+                # Select the citation checkbox
+                try:
+                    checkbox = self._page.get_by_role("checkbox").first
+                    await checkbox.click()
+                    await self._page.wait_for_timeout(300)
+                except Exception as e:
+                    self._status(f"  Could not select citation for PMID {pmid}: {e}")
+
+        # Click CONTINUE to save selections
+        await self._click("button", "CONTINUE")
+        await self._page.wait_for_timeout(500)
 
     async def _fill_personal_statement(self):
-        """Fill the Personal Statement section."""
-        if not self.data.personal_statement:
+        """Fill Supplement A: Personal Statement."""
+        ps = self.data.personal_statement
+        if not ps or not ps.get('text'):
             self._status("No personal statement to add")
             return
 
         self._status("Adding personal statement...")
 
-        try:
-            # Navigate to personal statement section
-            await self._page.click(SciENcvSelectors.PERSONAL_STATEMENT_SECTION)
-            await self._page.wait_for_load_state('networkidle')
+        # Build the full text including grants
+        text = ps.get('text', '')
 
-            # Fill the text
-            await self._page.fill(
-                SciENcvSelectors.PERSONAL_STATEMENT_TEXTAREA,
-                self.data.personal_statement.text
-            )
+        # Add research support section if grants exist
+        grants = ps.get('grants', [])
+        if grants:
+            text += "\n\nCurrent and recently completed research support:\n"
+            for grant in grants:
+                funder = grant.get('funder', '')
+                number = grant.get('number', '')
+                pi = grant.get('pi', '')
+                role = grant.get('role', '')
+                dates = grant.get('dates', '')
+                title = grant.get('title', '')
 
-            # Save
-            await self._page.click(SciENcvSelectors.SAVE_BUTTON)
-            await self._page.wait_for_timeout(500)
+                text += f"{funder} {number}\t{pi} ({role})\t{dates}\n"
+                text += f"{title}\n\n"
 
-            # Add citations if present
-            if self.data.personal_statement.citations:
-                self._status(f"Adding {len(self.data.personal_statement.citations)} citations to personal statement...")
-                for citation in self.data.personal_statement.citations:
-                    await self._add_citation(citation.pmid if citation.pmid else citation.text)
+        # Check character limit (3,500)
+        if len(text) > 3500:
+            self._status(f"  Warning: Personal statement is {len(text)} chars (limit: 3,500)")
+            text = text[:3500]
 
-        except Exception as e:
-            self._status(f"Error adding personal statement: {e}")
+        # Click ADD PERSONAL STATEMENT
+        await self._click("button", "ADD PERSONAL STATEMENT")
+        await self._page.wait_for_timeout(800)
 
-    async def _fill_positions(self):
-        """Fill the Positions section."""
-        if not self.data.positions:
-            self._status("No positions to add")
-            return
+        # Fill the textarea
+        textarea = self._page.locator('textarea').first
+        await textarea.fill(text)
 
-        self._status(f"Adding {len(self.data.positions)} positions...")
-
-        try:
-            await self._page.click(SciENcvSelectors.POSITIONS_SECTION)
-            await self._page.wait_for_load_state('networkidle')
-        except Exception:
-            pass
-
-        for i, pos in enumerate(self.data.positions):
-            self._status(f"Adding position {i + 1}/{len(self.data.positions)}: {pos.title}")
-            await self._add_position_entry(pos)
-
-    async def _add_position_entry(self, pos: Position):
-        """Add a single position entry."""
-        page = self._page
-
-        try:
-            await page.click(SciENcvSelectors.ADD_POSITION)
-            await page.wait_for_timeout(500)
-
-            # Parse dates (format: "2021-Present" or "2015-2019")
-            dates = pos.dates.replace('–', '-').split('-')
-            start_date = dates[0].strip() if dates else ''
-            end_date = dates[1].strip() if len(dates) > 1 else ''
-
-            await page.fill(SciENcvSelectors.POSITION_TITLE_INPUT, pos.title)
-            await page.fill(SciENcvSelectors.POSITION_ORG_INPUT, pos.institution)
-
-            if start_date:
-                await page.fill(SciENcvSelectors.POSITION_START_DATE, start_date)
-            if end_date and end_date.lower() != 'present':
-                await page.fill(SciENcvSelectors.POSITION_END_DATE, end_date)
-
-            await page.click(SciENcvSelectors.SAVE_BUTTON)
-            await page.wait_for_timeout(500)
-        except Exception as e:
-            self._status(f"Error adding position: {e}")
+        # Save
+        await self._click("button", "SAVE")
+        await self._page.wait_for_timeout(500)
+        self._status(f"  Added personal statement ({len(text)} characters)")
 
     async def _fill_honors(self):
-        """Fill the Honors section."""
+        """Fill Supplement B: Honors."""
         if not self.data.honors:
             self._status("No honors to add")
             return
 
-        self._status(f"Adding {len(self.data.honors)} honors...")
+        # NIH limits to 10 honors
+        honors = self.data.honors[:10]
+        self._status(f"Adding {len(honors)} honors...")
 
-        try:
-            await self._page.click(SciENcvSelectors.HONORS_SECTION)
-            await self._page.wait_for_load_state('networkidle')
-        except Exception:
-            pass
+        for i, honor in enumerate(honors):
+            is_last = (i == len(honors) - 1)
+            await self._add_honor_entry(honor, is_last)
+            self._status(f"  Added: {honor.get('year', '')} - {honor.get('description', '')[:50]}...")
 
-        for i, honor in enumerate(self.data.honors):
-            self._status(f"Adding honor {i + 1}/{len(self.data.honors)}")
-            await self._add_honor_entry(honor)
-
-    async def _add_honor_entry(self, honor: Honor):
+    async def _add_honor_entry(self, honor: Dict[str, Any], is_last: bool = False):
         """Add a single honor entry."""
-        page = self._page
+        # Click ADD HONOR
+        await self._click("button", "ADD HONOR")
+        await self._page.wait_for_timeout(800)
 
-        try:
-            await page.click(SciENcvSelectors.ADD_HONOR)
-            await page.wait_for_timeout(500)
+        # Fill Honor description
+        description = honor.get('description', '')
+        await self._fill("textbox", "Honor *", description)
 
-            await page.fill(SciENcvSelectors.HONOR_YEAR_INPUT, honor.year)
-            await page.fill(SciENcvSelectors.HONOR_DESCRIPTION_INPUT, honor.description)
+        # Fill Organization (parse from description if not provided)
+        organization = honor.get('organization', '')
+        if organization:
+            await self._fill("textbox", "Name of Organization *", organization)
 
-            await page.click(SciENcvSelectors.SAVE_BUTTON)
-            await page.wait_for_timeout(500)
-        except Exception as e:
-            self._status(f"Error adding honor: {e}")
+        # Fill Year
+        year = honor.get('year', '')
+        if year:
+            await self._fill("textbox", "Year *", year)
+
+        # Save
+        if is_last:
+            await self._click("button", "SAVE")
+        else:
+            await self._click("button", "SAVE & ADD ANOTHER")
+
+        await self._page.wait_for_timeout(500)
 
     async def _fill_contributions(self):
-        """Fill the Contributions to Science section."""
+        """Fill Supplement C: Contributions to Science."""
         if not self.data.contributions:
             self._status("No contributions to add")
             return
@@ -335,83 +473,193 @@ class SciENcvFiller:
         contributions = self.data.contributions[:5]
         self._status(f"Adding {len(contributions)} contributions to science...")
 
-        try:
-            await self._page.click(SciENcvSelectors.CONTRIBUTIONS_SECTION)
-            await self._page.wait_for_load_state('networkidle')
-        except Exception:
-            pass
-
         for i, contrib in enumerate(contributions):
-            self._status(f"Adding contribution {i + 1}/{len(contributions)}")
-            await self._add_contribution_entry(contrib)
+            is_first = (i == 0)
+            is_last = (i == len(contributions) - 1)
+            await self._add_contribution_entry(contrib, is_first, is_last)
+            narrative_preview = contrib.get('narrative', '')[:50]
+            self._status(f"  Added contribution {i+1}: {narrative_preview}...")
 
-    async def _add_contribution_entry(self, contrib: Contribution):
+    async def _add_contribution_entry(
+        self,
+        contrib: Dict[str, Any],
+        is_first: bool = True,
+        is_last: bool = False
+    ):
         """Add a single contribution entry."""
-        page = self._page
+        # Click appropriate add button
+        if is_first:
+            await self._click("button", "ADD CONTRIBUTION TO SCIENCE")
+        else:
+            await self._click("button", "ADD ANOTHER CONTRIBUTION TO SCIENCE")
+
+        await self._page.wait_for_timeout(800)
+
+        # Fill narrative (2,000 char limit)
+        narrative = contrib.get('narrative', '')
+        if len(narrative) > 2000:
+            self._status(f"    Warning: Contribution is {len(narrative)} chars (limit: 2,000)")
+            narrative = narrative[:2000]
+
+        # Find and fill textarea
+        textarea = self._page.locator('textarea').first
+        await textarea.fill(narrative)
+
+        # Save
+        await self._click("button", "SAVE")
+        await self._page.wait_for_timeout(1000)
+
+        # Add citations if present
+        citations = contrib.get('citations', [])
+        if citations:
+            self._status(f"    Adding {len(citations)} citations...")
+            for citation in citations:
+                await self._add_citation(citation)
+
+    async def _add_citation(self, citation: Dict[str, Any]):
+        """Add a citation to the current contribution."""
+        pmid = citation.get('pmid', '')
+        if not pmid:
+            return
 
         try:
-            await page.click(SciENcvSelectors.ADD_CONTRIBUTION)
-            await page.wait_for_timeout(500)
+            # Click ADD CITATION
+            await self._click("button", "ADD CITATION")
+            await self._page.wait_for_timeout(800)
 
-            await page.fill(SciENcvSelectors.CONTRIBUTION_NARRATIVE, contrib.narrative)
+            # Search by PMID
+            search_input = self._page.get_by_role("textbox", name="Search")
+            await search_input.fill(pmid)
+            await self._page.keyboard.press('Enter')
+            await self._page.wait_for_timeout(1500)
 
-            await page.click(SciENcvSelectors.SAVE_BUTTON)
-            await page.wait_for_timeout(500)
+            # Select the citation
+            checkbox = self._page.get_by_role("checkbox").first
+            await checkbox.click()
+            await self._page.wait_for_timeout(300)
 
-            # Add citations for this contribution
-            if contrib.citations:
-                self._status(f"Adding {len(contrib.citations)} citations...")
-                for citation in contrib.citations:
-                    await self._add_citation(citation.pmid if citation.pmid else citation.text)
+            # Confirm selection
+            await self._click("button", "SELECT")
+            await self._page.wait_for_timeout(500)
 
         except Exception as e:
-            self._status(f"Error adding contribution: {e}")
+            self._status(f"    Could not add citation PMID {pmid}: {e}")
 
-    async def _add_citation(self, identifier: str):
-        """Add a citation by PMID or text search."""
-        page = self._page
+    def _parse_state(self, location: str) -> str:
+        """Parse state abbreviation from location string."""
+        # Common state mappings
+        states = {
+            'IL': 'Illinois', 'Illinois': 'Illinois',
+            'MA': 'Massachusetts', 'Massachusetts': 'Massachusetts',
+            'NY': 'New York', 'New York': 'New York',
+            'CA': 'California', 'California': 'California',
+            'TX': 'Texas', 'Texas': 'Texas',
+            'PA': 'Pennsylvania', 'Pennsylvania': 'Pennsylvania',
+            'OH': 'Ohio', 'Ohio': 'Ohio',
+            'MI': 'Michigan', 'Michigan': 'Michigan',
+            'MD': 'Maryland', 'Maryland': 'Maryland',
+            'NC': 'North Carolina', 'North Carolina': 'North Carolina',
+        }
 
-        try:
-            await page.click(SciENcvSelectors.ADD_CITATION)
-            await page.wait_for_timeout(500)
+        for abbr, full in states.items():
+            if abbr in location or full in location:
+                return full
 
-            # Try PMID first
-            if identifier and identifier.isdigit():
-                try:
-                    await page.fill(SciENcvSelectors.PMID_INPUT, identifier)
-                except Exception:
-                    await page.fill(SciENcvSelectors.CITATION_SEARCH, identifier)
-            else:
-                await page.fill(SciENcvSelectors.CITATION_SEARCH, identifier[:100] if identifier else '')
+        return 'Illinois'  # Default
 
-            await page.click(SciENcvSelectors.SAVE_BUTTON)
-            await page.wait_for_timeout(500)
-        except Exception as e:
-            self._status(f"Error adding citation: {e}")
+    def _parse_date_for_sciencv(self, date_str: str) -> str:
+        """Parse various date formats to MM/YYYY for SciENcv."""
+        import re
+
+        # Already in MM/YYYY format
+        if re.match(r'^\d{2}/\d{4}$', date_str):
+            return date_str
+
+        # Just year: YYYY -> 06/YYYY
+        if re.match(r'^\d{4}$', date_str):
+            return f"06/{date_str}"
+
+        # Month Year: "Jun 2012" -> "06/2012"
+        months = {
+            'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04',
+            'may': '05', 'jun': '06', 'jul': '07', 'aug': '08',
+            'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12'
+        }
+
+        for month, num in months.items():
+            if month in date_str.lower():
+                year_match = re.search(r'\d{4}', date_str)
+                if year_match:
+                    return f"{num}/{year_match.group()}"
+
+        return date_str
 
 
 async def run_automation(
     data_dict: Dict[str, Any],
     headless: bool = False,
-    browser_state_path: Optional[str] = None,
-    on_status_update: Optional[Callable[[str], None]] = None
+    on_status: Optional[Callable[[str], None]] = None
 ) -> bool:
-    """Run the SciENcv automation with the provided data.
+    """Run the SciENcv automation with provided data.
 
     Args:
-        data_dict: Dictionary of biosketch data
-        headless: Whether to run headless (default False)
-        browser_state_path: Path for session persistence
-        on_status_update: Status callback
+        data_dict: Dictionary of biosketch data from the app
+        headless: Whether to run headless (default False for login)
+        on_status: Status callback function
 
     Returns:
         True if successful, False otherwise
     """
     data = BiosketchData.from_dict(data_dict)
-    filler = SciENcvFiller(
+    automation = SciENcvAutomation(
         data=data,
         headless=headless,
-        browser_state_path=browser_state_path,
-        on_status_update=on_status_update
+        on_status=on_status
     )
-    return await filler.start()
+    return await automation.run()
+
+
+# CLI entry point for testing
+if __name__ == '__main__':
+    import json
+    import sys
+
+    async def main():
+        # Load test data from file or use sample
+        if len(sys.argv) > 1:
+            with open(sys.argv[1]) as f:
+                data = json.load(f)
+        else:
+            # Sample data for testing
+            data = {
+                "name": "William Parker",
+                "era_commons_username": "WILLIAMFPARKER",
+                "position_title": "Assistant Professor",
+                "education": [
+                    {
+                        "institution": "Williams College",
+                        "degree": "Bachelor of Arts",
+                        "completion_date": "2008",
+                        "field_of_study": "Physics",
+                        "location": "Williamstown, MA"
+                    }
+                ],
+                "positions": [
+                    {
+                        "title": "Assistant Professor",
+                        "institution": "University of Chicago",
+                        "dates": "2021-Present"
+                    }
+                ],
+                "honors": [],
+                "personal_statement": {
+                    "text": "Sample personal statement text...",
+                    "grants": []
+                },
+                "contributions": [],
+                "products": {"related": [], "other": []}
+            }
+
+        await run_automation(data, headless=False)
+
+    asyncio.run(main())

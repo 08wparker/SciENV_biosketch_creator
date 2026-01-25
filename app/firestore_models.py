@@ -64,16 +64,24 @@ def save_biosketch(
     data: Dict[str, Any],
     user_id: Optional[str] = None,
     selected_contributions: Optional[List[int]] = None,
-    selected_products: Optional[Dict[str, List[int]]] = None
+    selected_products: Optional[Dict[str, List[int]]] = None,
+    edited_positions: Optional[List[Dict[str, Any]]] = None,
+    edited_personal_statement: Optional[Dict[str, Any]] = None,
+    edited_contributions: Optional[List[Dict[str, Any]]] = None,
+    merge_history: Optional[List[Dict[str, Any]]] = None
 ) -> Dict[str, Any]:
-    """Save or update a biosketch.
+    """Save or update a biosketch with all user edits.
 
     Args:
         job_id: Unique job identifier (used as document ID)
-        data: Parsed biosketch data
+        data: Original parsed biosketch data (preserved)
         user_id: Firebase Auth UID (None for anonymous)
         selected_contributions: List of selected contribution indices
         selected_products: Dict with 'related' and 'other' product indices
+        edited_positions: User-edited positions with locations
+        edited_personal_statement: User-edited personal statement
+        edited_contributions: User-edited/merged contributions
+        merge_history: History of contribution merges
 
     Returns:
         The saved document data
@@ -97,6 +105,16 @@ def save_biosketch(
         doc_data['selected_contributions'] = selected_contributions
     if selected_products is not None:
         doc_data['selected_products'] = selected_products
+
+    # Save user-edited data fields
+    if edited_positions is not None:
+        doc_data['edited_positions'] = edited_positions
+    if edited_personal_statement is not None:
+        doc_data['edited_personal_statement'] = edited_personal_statement
+    if edited_contributions is not None:
+        doc_data['edited_contributions'] = edited_contributions
+    if merge_history is not None:
+        doc_data['merge_history'] = merge_history
 
     # Check if document exists
     existing = doc_ref.get()

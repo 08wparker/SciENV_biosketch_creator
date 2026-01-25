@@ -3,6 +3,7 @@
 from __future__ import annotations
 import os
 import uuid
+from datetime import datetime
 from pathlib import Path
 from flask import Blueprint, request, jsonify, render_template, current_app, redirect, url_for, g
 from werkzeug.utils import secure_filename
@@ -67,10 +68,14 @@ def get_biosketch_data_helper(job_id: str, user_id: str = None):
 
 
 def save_biosketch_data_helper(job_id: str, data: dict, user_id: str = None,
-                               selected_contributions=None, selected_products=None):
+                               selected_contributions=None, selected_products=None,
+                               edited_positions=None, edited_personal_statement=None,
+                               edited_contributions=None, merge_history=None):
     """Save biosketch data to Firestore or memory."""
     if user_id:
-        save_biosketch(job_id, data, user_id, selected_contributions, selected_products)
+        save_biosketch(job_id, data, user_id, selected_contributions, selected_products,
+                       edited_positions, edited_personal_statement,
+                       edited_contributions, merge_history)
     else:
         parsed_data_store[job_id] = data
 
@@ -98,21 +103,33 @@ def review(job_id: str):
     if not data:
         return render_template('error.html', message='Job not found'), 404
 
-    # Get selected items from Firestore if user is logged in
+    # Get selected items and edited data from Firestore if user is logged in
     selected_contributions = []
     selected_products = {}
+    edited_positions = None
+    edited_personal_statement = None
+    edited_contributions = None
+    merge_history = None
 
     if user_id:
         biosketch = get_biosketch(job_id, user_id)
         if biosketch:
             selected_contributions = biosketch.get('selected_contributions') or []
             selected_products = biosketch.get('selected_products') or {}
+            edited_positions = biosketch.get('edited_positions')
+            edited_personal_statement = biosketch.get('edited_personal_statement')
+            edited_contributions = biosketch.get('edited_contributions')
+            merge_history = biosketch.get('merge_history')
 
     return render_template('review.html',
                            job_id=job_id,
                            data=data,
                            selected_contributions=selected_contributions,
-                           selected_products=selected_products)
+                           selected_products=selected_products,
+                           edited_positions=edited_positions,
+                           edited_personal_statement=edited_personal_statement,
+                           edited_contributions=edited_contributions,
+                           merge_history=merge_history)
 
 
 # ============ API Routes ============
@@ -195,18 +212,26 @@ def update_parsed_data(job_id: str):
         return jsonify({'error': 'No data provided'}), 400
 
     try:
-        # Merge updated fields
+        # Merge updated fields into current data
         current_data.update(data)
 
         # Extract selected items
         selected_contributions = data.get('selected_contributions')
         selected_products = data.get('selected_products')
 
-        # Save updated data
-        save_biosketch_data_helper(job_id, current_data, user_id,
-                                   selected_contributions, selected_products)
+        # Extract user-edited data
+        edited_positions = data.get('positions')
+        edited_personal_statement = data.get('personal_statement')
+        edited_contributions = data.get('contributions')
+        merge_history = data.get('merge_history')
 
-        return jsonify({'status': 'success', 'data': current_data})
+        # Save updated data with all edited fields
+        save_biosketch_data_helper(job_id, current_data, user_id,
+                                   selected_contributions, selected_products,
+                                   edited_positions, edited_personal_statement,
+                                   edited_contributions, merge_history)
+
+        return jsonify({'status': 'success', 'saved_at': datetime.utcnow().isoformat()})
     except Exception as e:
         return jsonify({'error': f'Failed to update data: {str(e)}'}), 500
 

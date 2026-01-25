@@ -440,6 +440,14 @@
         </div>
 
         <div class="flex flex-wrap gap-4 items-center">
+            <button onclick="saveAllChanges()"
+                    id="save-btn"
+                    class="px-6 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors flex items-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                Save Changes
+            </button>
             <button onclick="startAutoFill()"
                     id="autofill-btn"
                     class="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
@@ -455,6 +463,21 @@
                class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">
                 View JSON
             </a>
+        </div>
+
+        <!-- Save Status Indicator -->
+        <div id="save-status" class="mt-4 hidden">
+            <div id="save-success" class="hidden p-3 bg-green-50 border border-green-200 rounded-lg">
+                <p class="text-green-800 text-sm flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    Changes saved successfully at <span id="save-timestamp"></span>
+                </p>
+            </div>
+            <div id="save-error" class="hidden p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p class="text-red-800 text-sm" id="save-error-message">Failed to save changes</p>
+            </div>
         </div>
 
         <div id="automation-status" class="mt-4 hidden">
@@ -486,14 +509,34 @@
 
 {% block extra_scripts %}
 <script>
-    // Store data
+    // Store data - use edited versions if available, otherwise use original parsed data
+    {% if edited_contributions %}
+    let contributions = {{ edited_contributions | tojson | safe }};
+    {% else %}
     let contributions = {{ data.contributions | tojson | safe }};
+    {% endif %}
+
+    {% if edited_personal_statement %}
+    let personalStatement = {{ edited_personal_statement | tojson | safe }};
+    {% else %}
     let personalStatement = {{ data.personal_statement | tojson | safe if data.personal_statement else '{}' }};
+    {% endif %}
+
+    {% if edited_positions %}
+    let positions = {{ edited_positions | tojson | safe }};
+    {% else %}
     let positions = {{ data.positions | tojson | safe }};
+    {% endif %}
+
     let selectedIndices = new Set();
     let selectedRelatedProducts = new Set();
     let selectedOtherProducts = new Set();
     const jobId = '{{ job_id }}';
+
+    // Track unsaved changes and merge history
+    let hasUnsavedChanges = false;
+    let isInitialLoad = true;  // Prevents marking unsaved during initial page load
+    let mergeHistory = {{ merge_history | tojson | safe if merge_history else '[]' }};
 
     // Restore previously selected items
     const savedSelectedContributions = {{ selected_contributions | tojson | safe if selected_contributions else '[]' }};
@@ -504,6 +547,105 @@
     const savedSelectedRelatedProducts = [];
     const savedSelectedOtherProducts = [];
     {% endif %}
+
+    // ============ Save Functions ============
+
+    function markUnsaved() {
+        if (isInitialLoad) return;  // Don't mark unsaved during initial page load
+        hasUnsavedChanges = true;
+        const saveBtn = document.getElementById('save-btn');
+        if (saveBtn) {
+            saveBtn.classList.add('ring-2', 'ring-yellow-400');
+        }
+    }
+
+    async function saveAllChanges() {
+        const saveBtn = document.getElementById('save-btn');
+        const saveStatus = document.getElementById('save-status');
+        const saveSuccess = document.getElementById('save-success');
+        const saveError = document.getElementById('save-error');
+
+        // Update button state
+        const originalContent = saveBtn.innerHTML;
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = `
+            <svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" opacity="0.25"></circle>
+                <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Saving...
+        `;
+
+        // Collect all data to save
+        const relatedProducts = [...selectedRelatedProducts].map(idx => allCitations[idx]);
+        const otherProducts = [...selectedOtherProducts].map(idx => allCitations[idx]);
+
+        const saveData = {
+            positions: positions,
+            personal_statement: personalStatement,
+            contributions: contributions,
+            selected_contributions: [...selectedIndices],
+            selected_products: {
+                related: [...selectedRelatedProducts],
+                other: [...selectedOtherProducts]
+            },
+            products: {
+                related: relatedProducts,
+                other: otherProducts
+            },
+            merge_history: mergeHistory
+        };
+
+        try {
+            const response = await authenticatedFetch(`/api/parse/${jobId}`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(saveData)
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to save');
+            }
+
+            // Show success
+            saveStatus.classList.remove('hidden');
+            saveSuccess.classList.remove('hidden');
+            saveError.classList.add('hidden');
+            document.getElementById('save-timestamp').textContent =
+                new Date().toLocaleTimeString();
+
+            // Reset unsaved state
+            hasUnsavedChanges = false;
+            saveBtn.classList.remove('ring-2', 'ring-yellow-400');
+
+            // Auto-hide success message after 5 seconds
+            setTimeout(() => {
+                saveStatus.classList.add('hidden');
+            }, 5000);
+
+        } catch (error) {
+            // Show error
+            saveStatus.classList.remove('hidden');
+            saveSuccess.classList.add('hidden');
+            saveError.classList.remove('hidden');
+            document.getElementById('save-error-message').textContent =
+                'Failed to save: ' + error.message;
+        } finally {
+            // Reset button
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = originalContent;
+        }
+    }
+
+    // Warn before leaving with unsaved changes
+    window.addEventListener('beforeunload', (e) => {
+        if (hasUnsavedChanges) {
+            e.preventDefault();
+            e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+        }
+    });
 
     // Combine all citations from personal statement and contributions
     let allCitations = [];
@@ -547,6 +689,7 @@
             input.classList.add('border-red-300', 'bg-red-50');
             input.classList.remove('border-gray-300');
         }
+        markUnsaved();
     }
 
     function updatePrimaryPosition(radio) {
@@ -555,6 +698,7 @@
         positions.forEach(p => p.primary = false);
         // Set the selected one as primary
         positions[idx].primary = true;
+        markUnsaved();
     }
 
     // ============ Products Selection Functions ============
@@ -619,6 +763,7 @@
         // Re-render both lists to disable items selected in the other list
         renderProductsList('related-products-list', selectedRelatedProducts, selectedOtherProducts, 'related-product-checkbox');
         renderProductsList('other-products-list', selectedOtherProducts, selectedRelatedProducts, 'other-product-checkbox');
+        markUnsaved();
     }
 
     function restoreProductSelections() {
@@ -669,6 +814,7 @@
         // Update display
         updatePersonalStatementDisplay();
         cancelPersonalStatementEdit();
+        markUnsaved();
     }
 
     function updatePersonalStatementDisplay() {
@@ -753,6 +899,7 @@
         // Rebuild citations list since contributions may have changed
         buildAllCitations();
         restoreProductSelections();
+        markUnsaved();
     }
 
     function updatePreview() {
@@ -780,6 +927,13 @@
         const indices = [...selectedIndices].sort((a, b) => a - b);
         const first = indices[0];
 
+        // Record merge in history for persistence
+        mergeHistory.push({
+            merged_indices: indices,
+            timestamp: new Date().toISOString(),
+            result_index: first
+        });
+
         // Combine narratives and citations
         let combinedNarrative = '';
         let combinedCitations = [];
@@ -806,18 +960,21 @@
         selectedIndices.clear();
         renderContributions();
         updateSelection();
+        markUnsaved();
     }
 
     function moveUp(index) {
         if (index === 0) return;
         [contributions[index - 1], contributions[index]] = [contributions[index], contributions[index - 1]];
         renderContributions();
+        markUnsaved();
     }
 
     function moveDown(index) {
         if (index >= contributions.length - 1) return;
         [contributions[index], contributions[index + 1]] = [contributions[index + 1], contributions[index]];
         renderContributions();
+        markUnsaved();
     }
 
     function deleteContribution(index) {
@@ -833,6 +990,7 @@
         selectedIndices = newSelected;
         renderContributions();
         updateSelection();
+        markUnsaved();
     }
 
     function renderContributions() {
@@ -908,6 +1066,7 @@
         contributions[index].narrative = textarea.value;
         renderContributions();
         updatePreview();
+        markUnsaved();
     }
 
     function cancelEdit(index) {
@@ -1133,6 +1292,8 @@
         updateSelection();
         restoreContributionSelections();
         restoreProductSelections();
+        // Allow marking unsaved after initial load is complete
+        isInitialLoad = false;
     });
 </script>
 {% endblock %}

@@ -58,6 +58,61 @@ When working on this project, always refer to these resources for understanding 
 - Each section has "ADD" buttons and Edit/Delete icons for entries
 - Products are selected via "SELECT RELATED PRODUCTS" and "SELECT OTHER PRODUCTS" buttons
 
+## Browser Automation (feature/automation-development)
+
+### Architecture
+- **Engine**: Playwright (async API with Chromium)
+- **Key files**:
+  - `app/automation/sciencv_filler.py` - Main automation class (~850 lines)
+  - `app/automation/selectors.py` - ARIA-based selectors
+  - `app/automation/claude_logs/` - JS logs from Claude in Chrome extension (selector discovery)
+  - `run_automation.py` - CLI script with sample biosketch data
+
+### Selector Strategy
+Selectors use Playwright's accessibility-based methods derived from Claude in Chrome logs:
+```python
+# Claude in Chrome → Playwright mapping:
+'button "TEXT"'    → page.get_by_role("button", name="TEXT")
+'textbox "LABEL"'  → page.get_by_label("LABEL")
+'combobox "LABEL"' → page.get_by_role("combobox", name="LABEL")
+'radio "TEXT"'     → page.get_by_role("radio", name="TEXT")
+```
+
+### Automation Flow
+1. **Login**: Opens browser, waits 5 min for user to complete Login.gov 2FA
+2. **Create Document**: NEW DOCUMENT → name + type → blank document → CREATE
+3. **Section A**: Professional Preparation (education/training entries)
+4. **Section B**: Appointments and Positions (skips primary, adds others)
+5. **Section C**: Products (PMID search for related + other products)
+6. **Supplement A**: Personal Statement (text + grants, 3500 char limit)
+7. **Supplement B**: Honors (max 10 entries)
+8. **Supplement C**: Contributions to Science (max 5, 2000 char limit each)
+
+### Running Locally
+```bash
+# Install dependencies
+pip install playwright
+playwright install chromium
+
+# Run with sample data
+python run_automation.py
+
+# Run with custom JSON
+python run_automation.py path/to/biosketch.json
+```
+
+### Known Issues (Debugging)
+| Priority | Issue | Location | Details |
+|----------|-------|----------|---------|
+| CRITICAL | Section B timeout | `_add_appointment_entry()` | ADD APPOINTMENT/POSITION button click fails |
+| HIGH | Degree dropdown timeout | `_add_education_entry()` | PhD/degree search times out |
+| MEDIUM | Status endpoint stub | `routes.py` | Always returns "pending", no real tracking |
+| MEDIUM | Primary appointment skip | `_edit_primary_appointment()` | Requires manual user verification |
+| LOW | PMID search validation | `_add_products_section()` | No error handling if citation not found |
+
+### Screenshots
+Automation takes numbered screenshots at each step to `/tmp/sciencv_*.png` for debugging.
+
 ## Backend Architecture
 
 ### Authentication (Firebase Auth)

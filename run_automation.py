@@ -30,58 +30,76 @@ SAMPLE_DATA = {
         {
             "institution": "Williams College",
             "degree": "Bachelor of Arts (BA)",
-            "completion_date": "2008",
+            "start_date": "09/2004",
+            "completion_date": "06/2008",
             "field_of_study": "Physics",
             "location": "Williamstown, MA"
         },
         {
             "institution": "University of Chicago",
             "degree": "Doctor of Medicine (MD)",
-            "completion_date": "2012",
+            "start_date": "09/2008",
+            "completion_date": "06/2012",
             "field_of_study": "Medicine",
             "location": "Chicago, IL"
         },
         {
             "institution": "University of Chicago",
             "degree": "PhD",
-            "completion_date": "2021",
+            "start_date": "09/2016",
+            "completion_date": "06/2021",
             "field_of_study": "Public Health Sciences",
             "location": "Chicago, IL"
         },
         {
             "institution": "University of Chicago",
             "degree": "Resident",
-            "completion_date": "2015",
+            "start_date": "07/2012",
+            "completion_date": "06/2015",
             "field_of_study": "Internal Medicine",
             "location": "Chicago, IL"
         },
         {
             "institution": "University of Chicago",
             "degree": "Fellow",
-            "completion_date": "2018",
+            "start_date": "07/2015",
+            "completion_date": "06/2018",
             "field_of_study": "Pulmonary and Critical Care Medicine",
+            "location": "Chicago, IL"
+        },
+        {
+            "institution": "University of Chicago",
+            "degree": "Fellow",
+            "start_date": "07/2013",
+            "completion_date": "06/2015",
+            "field_of_study": "Clinical Medical Ethics (MacLean Center)",
             "location": "Chicago, IL"
         }
     ],
     "positions": [
         {
-            "title": "Assistant Professor of Medicine and Public Health Sciences",
+            "title": "Associate Professor of Medicine and Public Health Sciences",
             "institution": "University of Chicago",
-            "dates": "2021-Present"
+            "location": "Chicago, IL",
+            "dates": "2021-Present",
+            "primary": True
         },
         {
             "title": "Co-Chair, Analytic Methods Subcommittee",
             "institution": "Scientific Registry of Transplant Recipients",
+            "location": "Minneapolis, MN",
             "dates": "2024-Present"
         },
         {
             "title": "Executive Director, CLIF Consortium",
             "institution": "University of Chicago",
+            "location": "Chicago, IL",
             "dates": "2024-Present"
         },
         {
             "title": "Instructor of Medicine",
             "institution": "University of Chicago",
+            "location": "Chicago, IL",
             "dates": "2018-2021"
         }
     ],

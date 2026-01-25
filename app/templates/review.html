@@ -97,23 +97,39 @@
             <table class="w-full text-sm">
                 <thead class="bg-gray-50">
                     <tr>
+                        <th class="px-3 py-2 text-center text-gray-600">Primary</th>
                         <th class="px-4 py-2 text-left text-gray-600">Date</th>
                         <th class="px-4 py-2 text-left text-gray-600">Title</th>
                         <th class="px-4 py-2 text-left text-gray-600">Organization/Department</th>
+                        <th class="px-4 py-2 text-left text-gray-600">Location <span class="text-red-500">*</span></th>
                     </tr>
                 </thead>
                 <tbody class="divide-y">
                     {% for pos in data.positions %}
                     <tr class="hover:bg-gray-50">
+                        <td class="px-3 py-2 text-center">
+                            <input type="radio" name="primary-position"
+                                   class="w-4 h-4 text-purple-600"
+                                   data-index="{{ loop.index0 }}"
+                                   {{ 'checked' if pos.primary else '' }}
+                                   onchange="updatePrimaryPosition(this)">
+                        </td>
                         <td class="px-4 py-2 whitespace-nowrap">{{ pos.dates }}</td>
                         <td class="px-4 py-2">{{ pos.title }}</td>
                         <td class="px-4 py-2">{{ pos.institution }}</td>
+                        <td class="px-4 py-2">
+                            <input type="text" class="position-location border rounded px-2 py-1 text-sm w-full {% if not pos.location %}border-red-300 bg-red-50{% else %}border-gray-300{% endif %}"
+                                   data-index="{{ loop.index0 }}"
+                                   value="{{ pos.location or '' }}"
+                                   placeholder="City, State (required for SciENcv)"
+                                   onchange="updatePositionLocation(this)">
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
-        <p class="text-xs text-gray-500 mt-2">{{ data.positions|length }} entries</p>
+        <p class="text-xs text-gray-500 mt-2">{{ data.positions|length }} entries{% if data.positions %} - Select your current/primary appointment{% endif %}{% if data.positions and not data.positions[0].location %} <span class="text-red-600 font-medium">| Location required for SciENcv</span>{% endif %}</p>
     </div>
 
     <!-- C. Products Section -->
@@ -420,22 +436,15 @@
     <div class="bg-white rounded-lg shadow-md p-6">
         <div class="mb-4">
             <h3 class="text-lg font-semibold text-gray-800 mb-2">Ready to create your SciENcv entry?</h3>
-            <p class="text-sm text-gray-600 mb-4">Use Claude in Chrome to automatically fill out your SciENcv form with your biosketch data.</p>
-        </div>
-
-        <!-- Instructions -->
-        <div class="bg-maroon-50 border border-maroon-200 rounded-lg p-4 mb-4">
-            <h4 class="font-medium text-maroon-800 mb-2">How to use with Claude in Chrome:</h4>
-            <ol class="list-decimal list-inside text-sm text-maroon-700 space-y-2">
-                <li>Click <strong>"Copy JSON for Claude"</strong> below to copy your biosketch data</li>
-                <li>Go to <a href="https://www.ncbi.nlm.nih.gov/labs/sciencv/" target="_blank" class="underline hover:text-maroon-900">SciENcv</a> and log in</li>
-                <li>Click <strong>"+ NEW DOCUMENT"</strong> and create a new NIH Biographical Sketch Common Form</li>
-                <li>Open <strong>Claude in Chrome</strong> (browser extension)</li>
-                <li>Paste the JSON and ask Claude to help fill out each section of the form</li>
-            </ol>
+            <p class="text-sm text-gray-600 mb-4">Auto-fill your SciENcv form or use Claude in Chrome manually.</p>
         </div>
 
         <div class="flex flex-wrap gap-4 items-center">
+            <button onclick="startAutoFill()"
+                    id="autofill-btn"
+                    class="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                Auto-fill SciENcv
+            </button>
             <button onclick="copyJsonForClaude()"
                     id="copy-json-btn"
                     class="px-6 py-2 bg-maroon-700 text-white rounded-lg font-medium hover:bg-maroon-800 transition-colors">
@@ -446,11 +455,10 @@
                class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">
                 View JSON
             </a>
-            <button disabled
-                    class="px-6 py-2 bg-gray-300 text-gray-500 rounded-lg font-medium cursor-not-allowed"
-                    title="Coming soon!">
-                Auto-fill (Coming Soon)
-            </button>
+        </div>
+
+        <div id="automation-status" class="mt-4 hidden">
+            <p id="status-message" class="text-gray-800"></p>
         </div>
 
         <div id="copy-status" class="mt-4 hidden">
@@ -458,6 +466,20 @@
                 <p class="text-green-800">JSON copied to clipboard! Paste it into Claude in Chrome.</p>
             </div>
         </div>
+
+        <!-- Manual Claude instructions (collapsed) -->
+        <details class="mt-4">
+            <summary class="text-sm text-gray-500 cursor-pointer hover:text-gray-700">Manual option: Claude in Chrome instructions</summary>
+            <div class="bg-maroon-50 border border-maroon-200 rounded-lg p-4 mt-2">
+                <ol class="list-decimal list-inside text-sm text-maroon-700 space-y-2">
+                    <li>Click <strong>"Copy JSON for Claude"</strong> above to copy your biosketch data</li>
+                    <li>Go to <a href="https://www.ncbi.nlm.nih.gov/labs/sciencv/" target="_blank" class="underline hover:text-maroon-900">SciENcv</a> and log in</li>
+                    <li>Click <strong>"+ NEW DOCUMENT"</strong> and create a new NIH Biographical Sketch Common Form</li>
+                    <li>Open <strong>Claude in Chrome</strong> (browser extension)</li>
+                    <li>Paste the JSON and ask Claude to help fill out each section of the form</li>
+                </ol>
+            </div>
+        </details>
     </div>
 </div>
 {% endblock %}
@@ -467,6 +489,7 @@
     // Store data
     let contributions = {{ data.contributions | tojson | safe }};
     let personalStatement = {{ data.personal_statement | tojson | safe if data.personal_statement else '{}' }};
+    let positions = {{ data.positions | tojson | safe }};
     let selectedIndices = new Set();
     let selectedRelatedProducts = new Set();
     let selectedOtherProducts = new Set();
@@ -509,6 +532,29 @@
                 });
             }
         });
+    }
+
+    // ============ Position Functions ============
+
+    function updatePositionLocation(input) {
+        const idx = parseInt(input.dataset.index);
+        positions[idx].location = input.value;
+        // Update styling based on whether location is filled
+        if (input.value.trim()) {
+            input.classList.remove('border-red-300', 'bg-red-50');
+            input.classList.add('border-gray-300');
+        } else {
+            input.classList.add('border-red-300', 'bg-red-50');
+            input.classList.remove('border-gray-300');
+        }
+    }
+
+    function updatePrimaryPosition(radio) {
+        const idx = parseInt(radio.dataset.index);
+        // Clear primary flag from all positions
+        positions.forEach(p => p.primary = false);
+        // Set the selected one as primary
+        positions[idx].primary = true;
     }
 
     // ============ Products Selection Functions ============
@@ -889,6 +935,62 @@
         }
     }
 
+    async function startAutoFill() {
+        const btn = document.getElementById('autofill-btn');
+        btn.disabled = true;
+        btn.textContent = 'Saving data...';
+        btn.className = 'px-6 py-2 bg-gray-400 text-white rounded-lg font-medium cursor-wait';
+
+        // Collect all current data including user edits
+        const selectedContributions = selectedIndices.size > 0
+            ? [...selectedIndices].sort((a, b) => a - b).map(idx => contributions[idx])
+            : contributions.slice(0, 5);
+
+        const relatedProducts = [...selectedRelatedProducts].map(idx => allCitations[idx]);
+        const otherProducts = [...selectedOtherProducts].map(idx => allCitations[idx]);
+
+        try {
+            // Save data to server
+            const response = await authenticatedFetch(`/api/parse/${jobId}`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    contributions: selectedContributions,
+                    personal_statement: personalStatement,
+                    positions: positions,
+                    selected_contributions: [...selectedIndices],
+                    selected_products: {
+                        related: [...selectedRelatedProducts],
+                        other: [...selectedOtherProducts]
+                    },
+                    products: {
+                        related: relatedProducts,
+                        other: otherProducts
+                    }
+                })
+            });
+
+            if (!response.ok) throw new Error('Failed to save data');
+
+            btn.textContent = 'Starting automation...';
+
+            // Start the automation
+            await startAutomation(jobId);
+
+        } catch (error) {
+            const statusDiv = document.getElementById('automation-status');
+            const statusMsg = document.getElementById('status-message');
+            statusDiv.classList.remove('hidden');
+            statusDiv.className = 'mt-4 p-4 bg-red-50 rounded-lg';
+            statusMsg.className = 'text-red-800';
+            statusMsg.textContent = 'Error: ' + error.message;
+
+            btn.disabled = false;
+            btn.textContent = 'Auto-fill SciENcv';
+            btn.className = 'px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors';
+        }
+    }
+
     async function saveAndContinue() {
         if (selectedIndices.size !== 5) {
             alert('Please select exactly 5 contributions');
@@ -921,6 +1023,7 @@
                 body: JSON.stringify({
                     contributions: selectedContributions,
                     personal_statement: personalStatement,
+                    positions: positions,
                     selected_contributions: [...selectedIndices],
                     selected_products: {
                         related: [...selectedRelatedProducts],
@@ -945,6 +1048,7 @@
     async function startAutomation(jobId) {
         const statusDiv = document.getElementById('automation-status');
         const statusMsg = document.getElementById('status-message');
+        const btn = document.getElementById('autofill-btn');
         statusDiv.classList.remove('hidden');
         statusMsg.textContent = 'Starting automation...';
 
@@ -956,18 +1060,34 @@
             const data = await response.json();
 
             if (data.status === 'started') {
-                statusMsg.textContent = data.message;
+                statusMsg.innerHTML = data.message + '<br><small class="text-green-600">A browser window will open. Log in to SciENcv, then the automation will fill your form. Review all entries before downloading the PDF.</small>';
                 statusDiv.className = 'mt-4 p-4 bg-green-50 rounded-lg';
                 statusMsg.className = 'text-green-800';
+                btn.textContent = 'Automation Running...';
+                btn.className = 'px-6 py-2 bg-green-500 text-white rounded-lg font-medium cursor-not-allowed';
+                btn.disabled = true;
+            } else if (data.status === 'coming_soon') {
+                statusMsg.innerHTML = data.message;
+                statusDiv.className = 'mt-4 p-4 bg-yellow-50 rounded-lg';
+                statusMsg.className = 'text-yellow-800';
+                btn.textContent = 'Auto-fill SciENcv';
+                btn.className = 'px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors';
+                btn.disabled = false;
             } else {
-                statusMsg.textContent = data.error || 'Failed to start automation';
+                statusMsg.textContent = data.error || data.message || 'Failed to start automation';
                 statusDiv.className = 'mt-4 p-4 bg-red-50 rounded-lg';
                 statusMsg.className = 'text-red-800';
+                btn.textContent = 'Auto-fill SciENcv';
+                btn.className = 'px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors';
+                btn.disabled = false;
             }
         } catch (error) {
             statusMsg.textContent = 'Error: ' + error.message;
             statusDiv.className = 'mt-4 p-4 bg-red-50 rounded-lg';
             statusMsg.className = 'text-red-800';
+            btn.textContent = 'Auto-fill SciENcv';
+            btn.className = 'px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors';
+            btn.disabled = false;
         }
     }
 
@@ -985,7 +1105,7 @@
             era_commons_username: '{{ data.era_commons_username }}',
             position_title: '{{ data.position_title }}',
             education: {{ data.education | tojson | safe }},
-            positions: {{ data.positions | tojson | safe }},
+            positions: positions,
             honors: {{ data.honors | tojson | safe }},
             personal_statement: personalStatement,
             contributions: selectedContributions.length > 0 ? selectedContributions : contributions.slice(0, 5),

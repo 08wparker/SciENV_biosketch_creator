@@ -54,17 +54,27 @@ class Position:
     dates: str
     title: str
     institution: str
+    location: str = ""
+    primary: bool = False
 
     def to_dict(self) -> dict:
         return {
             'dates': self.dates,
             'title': self.title,
-            'institution': self.institution
+            'institution': self.institution,
+            'location': self.location,
+            'primary': self.primary
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> 'Position':
-        return cls(**data)
+        return cls(
+            dates=data.get('dates', ''),
+            title=data.get('title', ''),
+            institution=data.get('institution', ''),
+            location=data.get('location', ''),
+            primary=data.get('primary', False)
+        )
 
 
 @dataclass

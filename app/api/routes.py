@@ -264,16 +264,29 @@ def start_automation_route(job_id: str):
 
     # Start automation in background thread
     import threading
+    import traceback
 
     def run_in_thread():
-        def status_callback(msg):
+        log_file = '/tmp/sciencv_automation.log'
+
+        def log(msg):
+            with open(log_file, 'a') as f:
+                f.write(f"{msg}\n")
             print(f"[Automation] {msg}")
 
+        def status_callback(msg):
+            log(msg)
+
+        log(f"Thread started for job {job_id}")
+        log(f"Data keys: {list(data.keys())}")
+
         try:
+            log("Calling run_automation_sync...")
             success = run_automation_sync(data, on_status=status_callback)
-            print(f"[Automation] Completed: {'success' if success else 'failed'}")
+            log(f"Completed: {'success' if success else 'failed'}")
         except Exception as e:
-            print(f"[Automation] Error: {e}")
+            log(f"Error: {e}")
+            log(traceback.format_exc())
 
     thread = threading.Thread(target=run_in_thread, daemon=True)
     thread.start()

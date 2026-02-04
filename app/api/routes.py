@@ -77,7 +77,12 @@ def save_biosketch_data_helper(job_id: str, data: dict, user_id: str = None,
                        edited_positions, edited_personal_statement,
                        edited_contributions, merge_history)
     else:
-        parsed_data_store[job_id] = data
+        # For anonymous users, store data with selections in memory
+        parsed_data_store[job_id] = {
+            **data,
+            '_selected_contributions': selected_contributions,
+            '_selected_products': selected_products,
+        }
 
 
 # ============ Main Routes ============

@@ -583,7 +583,6 @@
         const saveData = {
             positions: positions,
             personal_statement: personalStatement,
-            contributions: contributions,
             selected_contributions: [...selectedIndices],
             selected_products: {
                 related: [...selectedRelatedProducts],
@@ -593,8 +592,13 @@
                 related: relatedProducts,
                 other: otherProducts
             },
-            merge_history: mergeHistory
         };
+
+        // Only save edited contributions if there were actual changes (merges/deletes/edits)
+        if (mergeHistory.length > 0) {
+            saveData.contributions = contributions;
+            saveData.merge_history = mergeHistory;
+        }
 
         try {
             const response = await authenticatedFetch(`/api/parse/${jobId}`, {

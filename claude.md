@@ -113,6 +113,32 @@ python run_automation.py path/to/biosketch.json
 ### Screenshots
 Automation takes numbered screenshots at each step to `/tmp/sciencv_*.png` for debugging.
 
+### HTML Formatting
+SciENcv supports HTML tags in **Personal Statement** and **Contributions to Science** fields.
+The automation automatically applies HTML formatting for improved readability.
+
+**Reference**: `html_format_tips/SciENcv_HTML_Guide.pdf`
+
+**Supported Tags**:
+| Format | HTML |
+|--------|------|
+| Bold | `<b>text</b>` |
+| Italic | `<i>text</i>` |
+| Line break | `<br>` |
+| Paragraph break | `<br><br>` |
+| Superscript | `<sup>text</sup>` |
+| Subscript | `<sub>text</sub>` |
+
+**Auto-formatting Applied**:
+- **Contribution headers**: "Contribution 1: Topic." → `<b>Contribution 1: Topic.</b><br>`
+- **Section headers**: "Overview:", "Expertise:", "Commitment:" → bolded
+- **Scientific notation**: `10^8` → `10<sup>8</sup>`, `R2` → `R<sup>2</sup>`
+- **Chemical formulas**: `CO2` → `CO<sub>2</sub>`, `H2O` → `H<sub>2</sub>O`
+- **Gene names**: ACE2, BRCA1, TP53, etc. → italicized
+- **Paragraph breaks**: Double newlines → `<br><br>`
+
+**Implementation**: `HTMLFormatter` class in `app/automation/sciencv_filler.py`
+
 ## Backend Architecture
 
 ### Authentication (Firebase Auth)

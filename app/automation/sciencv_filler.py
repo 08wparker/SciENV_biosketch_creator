@@ -26,11 +26,152 @@ Flow:
 
 from __future__ import annotations
 import asyncio
+import re
 from datetime import datetime
 from typing import Optional, Callable, Dict, Any, List
 from dataclasses import dataclass
 
 from playwright.async_api import async_playwright, Page, Browser, BrowserContext
+
+
+# ==========================================================================
+# HTML FORMATTING HELPERS
+# SciENcv supports HTML in Personal Statement and Contributions to Science.
+# Supported tags: <b>, <i>, <br>, <sup>, <sub>
+# Reference: html_format_tips/SciENcv_HTML_Guide.pdf
+# ==========================================================================
+
+class HTMLFormatter:
+    """Formats text with HTML tags for SciENcv fields."""
+
+    # Common gene names to italicize
+    GENE_NAMES = [
+        'ACE2', 'BRCA1', 'BRCA2', 'TP53', 'EGFR', 'KRAS', 'BRAF', 'HER2',
+        'CFTR', 'APOE', 'TNF', 'IL6', 'IL1B', 'VEGF', 'MYC', 'RAS', 'AKT',
+        'PTEN', 'RB1', 'APC', 'MLH1', 'MSH2', 'CDKN2A', 'CDK4', 'JAK2',
+        'BCR', 'ABL', 'FLT3', 'NPM1', 'IDH1', 'IDH2', 'DNMT3A', 'TET2',
+    ]
+
+    # Section headers commonly used in personal statements
+    SECTION_HEADERS = [
+        'Overview:', 'Expertise:', 'Commitment:', 'Background:',
+        'Training:', 'Experience:', 'Qualifications:', 'Summary:',
+        'Research Focus:', 'Clinical Focus:', 'Leadership:', 'Mentoring:',
+        'Current and recently completed research support:',
+    ]
+
+    @classmethod
+    def format_for_sciencv(cls, text: str, is_contribution: bool = False) -> str:
+        """Apply all HTML formatting to text for SciENcv.
+
+        Args:
+            text: The text to format
+            is_contribution: If True, also format contribution headers
+
+        Returns:
+            HTML-formatted text
+        """
+        if not text:
+            return text
+
+        # Apply formatting in order
+        text = cls.format_scientific_notation(text)
+        text = cls.format_gene_names(text)
+        text = cls.format_section_headers(text)
+
+        if is_contribution:
+            text = cls.format_contribution_header(text)
+
+        # Convert paragraph breaks (double newlines) to HTML
+        text = cls.format_paragraph_breaks(text)
+
+        return text
+
+    @classmethod
+    def format_contribution_header(cls, text: str) -> str:
+        """Bold contribution headers and add line break after.
+
+        Example: "Contribution 1: Topic here. My work..." becomes
+                 "<b>Contribution 1: Topic here.</b><br>My work..."
+        """
+        # Match "Contribution N: " followed by text until first period
+        pattern = r'^(Contribution\s+\d+:\s*[^.]+\.)\s*'
+        match = re.match(pattern, text, re.IGNORECASE)
+        if match:
+            header = match.group(1)
+            rest = text[match.end():]
+            return f"<b>{header}</b><br>{rest}"
+        return text
+
+    @classmethod
+    def format_section_headers(cls, text: str) -> str:
+        """Bold common section headers.
+
+        Example: "Overview: I am a researcher" becomes
+                 "<b>Overview:</b> I am a researcher"
+        """
+        for header in cls.SECTION_HEADERS:
+            # Case-insensitive replacement, preserving original case
+            pattern = re.compile(re.escape(header), re.IGNORECASE)
+            text = pattern.sub(lambda m: f"<b>{m.group(0)}</b>", text)
+        return text
+
+    @classmethod
+    def format_scientific_notation(cls, text: str) -> str:
+        """Convert scientific notation to superscript.
+
+        Examples:
+            - "10^8" -> "10<sup>8</sup>"
+            - "R2" or "R^2" -> "R<sup>2</sup>"
+            - "CO2" -> "CO<sub>2</sub>"
+            - "H2O" -> "H<sub>2</sub>O"
+        """
+        # Handle explicit exponents: 10^8, 2^10, etc.
+        text = re.sub(r'(\d+)\^(\d+)', r'\1<sup>\2</sup>', text)
+
+        # Handle R-squared variants: R2, R^2
+        text = re.sub(r'\bR\^?2\b', r'R<sup>2</sup>', text)
+
+        # Handle p-values with exponents: p<10^-5, 10^-8
+        text = re.sub(r'10\^(-?\d+)', r'10<sup>\1</sup>', text)
+
+        # Handle common chemical formulas (subscripts)
+        # CO2, H2O, O2, N2, etc. - be careful not to match gene names
+        text = re.sub(r'\b(CO)2\b', r'\1<sub>2</sub>', text)
+        text = re.sub(r'\b(H)2(O)\b', r'\1<sub>2</sub>\2', text)
+        text = re.sub(r'\b(O)2\b', r'\1<sub>2</sub>', text)
+        text = re.sub(r'\b(N)2\b', r'\1<sub>2</sub>', text)
+
+        return text
+
+    @classmethod
+    def format_gene_names(cls, text: str) -> str:
+        """Italicize known gene names.
+
+        Example: "The ACE2 receptor" becomes "The <i>ACE2</i> receptor"
+        """
+        for gene in cls.GENE_NAMES:
+            # Word boundary match to avoid partial matches
+            pattern = re.compile(r'\b(' + re.escape(gene) + r')\b')
+            text = pattern.sub(r'<i>\1</i>', text)
+        return text
+
+    @classmethod
+    def format_paragraph_breaks(cls, text: str) -> str:
+        """Convert double newlines to HTML paragraph breaks.
+
+        Single newlines become <br>, double newlines become <br><br>.
+        """
+        # First normalize line endings
+        text = text.replace('\r\n', '\n')
+
+        # Double newlines -> paragraph break
+        text = re.sub(r'\n\n+', '<br><br>', text)
+
+        # Single newlines -> line break (but not if already followed by <br>)
+        text = re.sub(r'\n(?!<br>)', '<br>', text)
+
+        return text
 
 
 @dataclass
@@ -300,11 +441,33 @@ class SciENcvAutomation:
             await self._page.wait_for_timeout(500)
 
         # 4. Fill Organization
-        self._status(f"    Organization: {edu.get('institution', '')}")
-        await self._page.locator('#orgname').fill(edu.get('institution', ''))
+        # Parse institution - may contain location like "Williams College, Williamstown, MA"
+        institution_raw = edu.get('institution', '')
+        location = edu.get('location', '')
+
+        # If location is empty, try to extract it from institution string
+        if not location and ',' in institution_raw:
+            # Split by comma and check if last parts look like city, state
+            parts = [p.strip() for p in institution_raw.split(',')]
+            if len(parts) >= 3:
+                # Likely format: "Institution, City, State"
+                org_name = parts[0]
+                location = ', '.join(parts[1:])
+            elif len(parts) == 2:
+                # Could be "Institution, City State" or "Institution, Location"
+                # Check if second part contains a state abbreviation
+                if self._parse_state(parts[1]):
+                    org_name = parts[0]
+                    location = parts[1]
+                else:
+                    org_name = institution_raw
+        else:
+            org_name = institution_raw
+
+        self._status(f"    Organization: {org_name}")
+        await self._page.locator('#orgname').fill(org_name)
 
         # 5. Fill City (required field)
-        location = edu.get('location', '')
         city = location.split(',')[0].strip() if location else ''
         if city:
             self._status(f"    City: {city}")
@@ -670,7 +833,11 @@ class SciENcvAutomation:
                 title = grant.get('title', '')
                 text += f"{funder} {number}\t{pi} ({role})\t{dates}\n{title}\n\n"
 
-        # Enforce 3,500 character limit
+        # Apply HTML formatting for better readability
+        self._status("  Applying HTML formatting...")
+        text = HTMLFormatter.format_for_sciencv(text, is_contribution=False)
+
+        # Enforce 3,500 character limit (after formatting)
         if len(text) > 3500:
             self._status(f"  Warning: Text is {len(text)} chars (limit: 3,500), truncating")
             text = text[:3500]
@@ -827,7 +994,11 @@ class SciENcvAutomation:
             if citation_texts:
                 narrative += "\n\n" + "\n".join(f"{i+1}. {t}" for i, t in enumerate(citation_texts))
 
-        # Enforce 2,000 character limit
+        # Apply HTML formatting for better readability
+        self._status("    Applying HTML formatting...")
+        narrative = HTMLFormatter.format_for_sciencv(narrative, is_contribution=True)
+
+        # Enforce 2,000 character limit (after formatting)
         if len(narrative) > 2000:
             self._status(f"    Warning: Text is {len(narrative)} chars (limit: 2,000), truncating")
             narrative = narrative[:2000]
@@ -848,18 +1019,28 @@ class SciENcvAutomation:
     def _parse_state(self, location: str) -> str:
         """Parse state from location string."""
         states = {
-            'IL': 'Illinois', 'Illinois': 'Illinois',
-            'MA': 'Massachusetts', 'Massachusetts': 'Massachusetts',
-            'NY': 'New York', 'New York': 'New York',
-            'CA': 'California', 'California': 'California',
-            'TX': 'Texas', 'Texas': 'Texas',
-            'PA': 'Pennsylvania', 'Pennsylvania': 'Pennsylvania',
-            'MN': 'Minnesota', 'Minnesota': 'Minnesota',
+            'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas',
+            'CA': 'California', 'CO': 'Colorado', 'CT': 'Connecticut', 'DE': 'Delaware',
+            'FL': 'Florida', 'GA': 'Georgia', 'HI': 'Hawaii', 'ID': 'Idaho',
+            'IL': 'Illinois', 'IN': 'Indiana', 'IA': 'Iowa', 'KS': 'Kansas',
+            'KY': 'Kentucky', 'LA': 'Louisiana', 'ME': 'Maine', 'MD': 'Maryland',
+            'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota', 'MS': 'Mississippi',
+            'MO': 'Missouri', 'MT': 'Montana', 'NE': 'Nebraska', 'NV': 'Nevada',
+            'NH': 'New Hampshire', 'NJ': 'New Jersey', 'NM': 'New Mexico', 'NY': 'New York',
+            'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio', 'OK': 'Oklahoma',
+            'OR': 'Oregon', 'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina',
+            'SD': 'South Dakota', 'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah',
+            'VT': 'Vermont', 'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia',
+            'WI': 'Wisconsin', 'WY': 'Wyoming', 'DC': 'District of Columbia',
         }
+        # Also add full names as keys
+        full_names = {v: v for v in states.values()}
+        states.update(full_names)
+
         for abbr, full in states.items():
-            if abbr in location or full in location:
+            if abbr in location:
                 return full
-        return 'Illinois'  # Default
+        return ''  # Return empty if no state found
 
     def _parse_date_for_sciencv(self, date_str: str) -> str:
         """Parse date to MM/YYYY format for SciENcv."""

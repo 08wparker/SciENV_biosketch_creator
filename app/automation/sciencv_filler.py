@@ -394,14 +394,28 @@ class SciENcvAutomation:
         self._status(f"Adding {len(self.data.education)} education entries...")
         await self._screenshot("section_a_start")
 
+        success_count = 0
         for i, edu in enumerate(self.data.education):
-            is_first = (i == 0)
+            is_first = (i == 0) or (success_count == 0)  # Treat as first if no successful entries yet
             is_last = (i == len(self.data.education) - 1)
             self._status(f"  [{i+1}/{len(self.data.education)}] {edu.get('institution', 'Unknown')} - {edu.get('degree', '')}")
-            await self._add_education_entry(edu, is_first, is_last)
+            try:
+                await self._add_education_entry(edu, is_first, is_last)
+                success_count += 1
+            except Exception as e:
+                await self._screenshot(f"error_edu_{i}")
+                self._status(f"    Error adding entry: {e}")
+                # Try to close any open dialog
+                try:
+                    cancel_btn = self._page.get_by_role("button", name="CANCEL")
+                    if await cancel_btn.is_visible():
+                        await cancel_btn.click()
+                        await self._page.wait_for_timeout(500)
+                except Exception:
+                    pass
 
         await self._screenshot("section_a_complete")
-        self._status("Section A complete!")
+        self._status(f"Section A complete! ({success_count}/{len(self.data.education)} entries added)")
 
     async def _add_education_entry(self, edu: Dict[str, Any], is_first: bool = True, is_last: bool = False):
         """Add a single education/training entry.
@@ -423,11 +437,15 @@ class SciENcvAutomation:
         if is_first:
             # Log: await click('button "ADD PROFESSIONAL PREPARATION"')
             self._status("    Clicking ADD PROFESSIONAL PREPARATION...")
-            await self._page.get_by_role("button", name="ADD PROFESSIONAL PREPARATION").click()
-            await self._page.wait_for_timeout(1000)
+            add_btn = self._page.get_by_role("button", name="ADD PROFESSIONAL PREPARATION")
+            await add_btn.scroll_into_view_if_needed()
+            await self._page.wait_for_timeout(500)
+            await add_btn.click()
+            await self._page.wait_for_timeout(1500)
 
-        # 2. Wait for dialog
-        await self._page.locator('#orgname').wait_for(state='visible', timeout=10000)
+        # 2. Wait for dialog - use label-based selector (not CSS #orgname)
+        org_field = self._page.get_by_label("Organization", exact=False)
+        await org_field.wait_for(state='visible', timeout=10000)
         if is_first:
             await self._screenshot("edu_dialog")
 
@@ -465,74 +483,79 @@ class SciENcvAutomation:
             org_name = institution_raw
 
         self._status(f"    Organization: {org_name}")
-        await self._page.locator('#orgname').fill(org_name)
+        await self._page.get_by_label("Organization", exact=False).first.fill(org_name)
 
         # 5. Fill City (required field)
         city = location.split(',')[0].strip() if location else ''
         if city:
             self._status(f"    City: {city}")
-            await self._page.get_by_label("City *").fill(city)
+            await self._page.get_by_label("City", exact=False).first.fill(city)
 
         # 6. Select State/Province (required field)
         state = self._parse_state(location)
         if state:
             self._status(f"    State: {state}")
-            state_field = self._page.get_by_role("combobox", name="State/Province *")
-            await state_field.click()
-            await self._page.wait_for_timeout(300)
-            # Clear existing text before typing to prevent pollution
-            await state_field.fill("")
-            await self._page.keyboard.type(state[:4])
-            await self._page.wait_for_timeout(500)
             try:
-                option = self._page.get_by_role("option", name=state).first
-                await option.wait_for(state='visible', timeout=2000)
-                await option.click()
-            except Exception:
-                await self._page.keyboard.press('Enter')
-            await self._page.wait_for_timeout(300)
+                state_field = self._page.get_by_label("State/Province", exact=False)
+                await state_field.click()
+                await self._page.wait_for_timeout(500)
+                await self._page.keyboard.type(state[:4])
+                await self._page.wait_for_timeout(800)
+                try:
+                    option = self._page.get_by_role("option", name=state).first
+                    await option.wait_for(state='visible', timeout=2000)
+                    await option.click()
+                except Exception:
+                    await self._page.keyboard.press('Enter')
+                await self._page.wait_for_timeout(300)
+            except Exception as e:
+                self._status(f"    Warning: Could not set state: {e}")
 
         # 7. Select Degree or Training type (required field)
         degree_value = edu.get('degree', '')
         if degree_value:
             self._status(f"    Degree/Training: {degree_value}")
             try:
-                if is_training:
-                    # For Training type, use combobox selector and map to SciENcv options
-                    training_dropdown = self._page.get_by_role("combobox", name="Training *")
-                    await training_dropdown.click()
-                    await self._page.wait_for_timeout(300)
+                # Map common training types to SciENcv dropdown options
+                training_map = {
+                    'fellow': 'Fellowship',
+                    'fellowship': 'Fellowship',
+                    'resident': 'Residency',
+                    'residency': 'Residency',
+                    'postdoc': 'Postdoctoral',
+                    'postdoctoral': 'Postdoctoral',
+                    'intern': 'Internship',
+                    'internship': 'Internship',
+                }
 
-                    # Map common training types to SciENcv dropdown options
-                    training_map = {
-                        'fellow': 'Fellowship',
-                        'fellowship': 'Fellowship',
-                        'resident': 'Residency',
-                        'residency': 'Residency',
-                        'postdoc': 'Postdoctoral',
-                        'postdoctoral': 'Postdoctoral',
-                        'intern': 'Internship',
-                        'internship': 'Internship',
-                    }
+                if is_training:
+                    # For Training type - try multiple selector strategies
+                    dropdown = self._page.get_by_label("Training", exact=False)
                     search_text = training_map.get(degree_value.lower(), degree_value)
                 else:
-                    # For Degree type, use combobox selector
-                    degree_dropdown = self._page.get_by_role("combobox", name="Degree *")
-                    await degree_dropdown.click()
-                    await self._page.wait_for_timeout(300)
-                    # Strip parenthesized abbreviation, then type up to 20 chars
+                    # For Degree type - try label-based selector
+                    dropdown = self._page.get_by_label("Degree", exact=False)
+                    # Strip parenthesized abbreviation for search
                     search_text = degree_value.split('(')[0].strip()
 
-                await self._page.keyboard.type(search_text[:15])
-                await self._page.wait_for_timeout(800)
-                # Click the first visible filtered option
+                # Click the dropdown to open it
+                await dropdown.click()
+                await self._page.wait_for_timeout(500)
+
+                # Type to filter options
+                await self._page.keyboard.type(search_text[:12])
+                await self._page.wait_for_timeout(1000)
+
+                # Try to click the first matching option
                 try:
                     option = self._page.get_by_role("option").first
                     await option.wait_for(state='visible', timeout=3000)
                     await option.click()
                 except Exception:
+                    # Fallback: press Enter to select
                     await self._page.keyboard.press('Enter')
                 await self._page.wait_for_timeout(300)
+
             except Exception as e:
                 await self._screenshot("error_degree")
                 self._status(f"    Warning: Could not set degree/training: {e}")
@@ -627,14 +650,28 @@ class SciENcvAutomation:
             await self._edit_primary_appointment(primary)
 
         # Step 2: Add remaining positions
+        success_count = 0
         for i, pos in enumerate(others):
-            is_first = (i == 0)
+            is_first = (i == 0) or (success_count == 0)
             is_last = (i == len(others) - 1)
             self._status(f"  [{i+1}/{len(others)}] {pos.get('title', 'Unknown')}")
-            await self._add_appointment_entry(pos, is_first, is_last)
+            try:
+                await self._add_appointment_entry(pos, is_first, is_last)
+                success_count += 1
+            except Exception as e:
+                await self._screenshot(f"error_appt_{i}")
+                self._status(f"    Error adding entry: {e}")
+                # Try to close any open dialog
+                try:
+                    cancel_btn = self._page.get_by_role("button", name="CANCEL")
+                    if await cancel_btn.is_visible():
+                        await cancel_btn.click()
+                        await self._page.wait_for_timeout(500)
+                except Exception:
+                    pass
 
         await self._screenshot("section_b_complete")
-        self._status("Section B complete!")
+        self._status(f"Section B complete! ({success_count}/{len(others)} entries added)")
 
     async def _edit_primary_appointment(self, pos: Dict[str, Any]):
         """Handle the primary/current appointment.
@@ -678,26 +715,27 @@ class SciENcvAutomation:
         city = location.split(',')[0].strip() if location else ''
         if city:
             self._status(f"    City: {city}")
-            await self._page.get_by_label("City *").fill(city)
+            await self._page.get_by_label("City", exact=False).first.fill(city)
 
         # 6. Select State/Province (required by SciENcv)
         state = self._parse_state(location) if location else ''
         if state:
             self._status(f"    State: {state}")
-            state_field = self._page.get_by_role("combobox", name="State/Province *")
-            await state_field.click()
-            await self._page.wait_for_timeout(300)
-            # Clear existing text before typing to prevent pollution
-            await state_field.fill("")
-            await self._page.keyboard.type(state[:4])
-            await self._page.wait_for_timeout(500)
             try:
-                option = self._page.get_by_role("option", name=state).first
-                await option.wait_for(state='visible', timeout=2000)
-                await option.click()
-            except Exception:
-                await self._page.keyboard.press('Enter')
-            await self._page.wait_for_timeout(300)
+                state_field = self._page.get_by_label("State/Province", exact=False)
+                await state_field.click()
+                await self._page.wait_for_timeout(500)
+                await self._page.keyboard.type(state[:4])
+                await self._page.wait_for_timeout(800)
+                try:
+                    option = self._page.get_by_role("option", name=state).first
+                    await option.wait_for(state='visible', timeout=2000)
+                    await option.click()
+                except Exception:
+                    await self._page.keyboard.press('Enter')
+                await self._page.wait_for_timeout(300)
+            except Exception as e:
+                self._status(f"    Warning: Could not set state: {e}")
 
         # 7. Parse dates (format: "2021-Present" or "2015-2019")
         dates = pos.get('dates', '').replace('–', '-').replace('—', '-')
